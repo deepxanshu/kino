@@ -1,0 +1,124 @@
+/*
+ * SPDX-FileCopyrightText: 2026 M5Stack Technology CO LTD
+ *
+ * SPDX-License-Identifier: MIT
+ */
+#include "mic_handle.h"
+
+#include "M5Unified.h"
+#include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+extern "C" {
+#include "../joystick/joystick_basic.h"
+#include "../mic/mic_spectrum.h"
+#include "../ui/ui_mic_screen.h"
+}
+
+#define MIC_SAMPLE_RATE 16000
+#define MIC_SAMPLE_COUNT 256
+
+static const char *TAG = "mic_screen";
+
+static volatile bool s_mic_active = false;
+static volatile bool s_mic_muted  = false;
+static volatile bool s_mic_busy   = false;
+
+void mic_mode_enter(void)
+{
+    if (s_mic_active) {
+        return;
+    }
+
+    if (!M5.Mic.isEnabled()) {
+        ESP_LOGW(TAG, "Internal mic is not enabled");
+        s_mic_active = false;
+        return;
+    }
+
+    auto cfg          = M5.Mic.config();
+    cfg.sample_rate   = MIC_SAMPLE_RATE;
+    cfg.dma_buf_len   = 128;
+    cfg.dma_buf_count = 4;
+    cfg.over_sampling = 1;
+    M5.Mic.config(cfg);
+
+    s_mic_muted  = false;
+    s_mic_active = M5.Mic.begin();
+    ESP_LOGI(TAG, "Mic %s", s_mic_active ? "started" : "failed to start");
+}
+
+void mic_mode_exit(void)
+{
+    s_mic_active = false;
+    s_mic_muted  = true;
+
+    M5.Mic.end();
+
+    for (int i = 0; i < 200 && s_mic_busy; i++) {
+        vTaskDelay(pdMS_TO_TICKS(1));
+    }
+    ESP_LOGI(TAG, "Mic stopped");
+}
+
+void mic_mode_toggle_muted(void)
+{
+    s_mic_muted = !s_mic_muted;
+}
+
+bool mic_mode_is_muted(void)
+{
+    return s_mic_muted;
+}
+
+bool mic_mode_is_active(void)
+{
+    return s_mic_active;
+}
+
+void handle_mic_screen(void *pvParam)
+{
+    joystick_data_t *joystick_data = (joystick_data_t *)pvParam;
+    static int16_t samples[MIC_SAMPLE_COUNT];
+    static mic_spectrum_data_t spectrum;
+    static mic_spectrum_data_t empty_spectrum;
+    empty_spectrum.db = -90;
+
+    while (1) {
+        if (joystick_data->screen_mode != MODE_MIC) {
+            vTaskDelay(pdMS_TO_TICKS(200));
+            continue;
+        }
+
+        if (!s_mic_active || s_mic_muted) {
+            update_mic_screen(&empty_spectrum, joystick_data->bat, s_mic_active, s_mic_muted);
+            vTaskDelay(pdMS_TO_TICKS(50));
+            continue;
+        }
+
+        s_mic_busy = true;
+        bool recorded = M5.Mic.record(samples, MIC_SAMPLE_COUNT, MIC_SAMPLE_RATE, false);
+        if (recorded) {
+            while (M5.Mic.isRecording() && s_mic_active && joystick_data->screen_mode == MODE_MIC) {
+                vTaskDelay(pdMS_TO_TICKS(1));
+            }
+        }
+
+        if (!s_mic_active || joystick_data->screen_mode != MODE_MIC) {
+            s_mic_busy = false;
+            vTaskDelay(pdMS_TO_TICKS(20));
+            continue;
+        }
+
+        if (recorded && s_mic_active && joystick_data->screen_mode == MODE_MIC) {
+            mic_spectrum_compute(samples, MIC_SAMPLE_COUNT, MIC_SAMPLE_RATE, MIC_BAR_MAX_HEIGHT, &spectrum);
+            update_mic_screen(&spectrum, joystick_data->bat, true, false);
+        } else {
+            update_mic_screen(&empty_spectrum, joystick_data->bat, false, false);
+        }
+        s_mic_busy = false;
+
+        vTaskDelay(pdMS_TO_TICKS(20));
+    }
+}
