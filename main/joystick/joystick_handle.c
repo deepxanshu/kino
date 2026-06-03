@@ -14,6 +14,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
+#include "joyc_button.h"
 #include "joyc_i2c_bridge.h"
 #include "mouse_controller.h"
 
@@ -28,6 +29,8 @@ static SemaphoreHandle_t s_joystick_i2c_lock;
 static const char *TAG = "joy_diag";
 
 static TickType_t s_last_read_fail_log = 0;
+static uint8_t s_last_button_raw = 0xff;
+static bool s_button_raw_seen = false;
 
 static void log_joy_pins(const char *stage)
 {
@@ -174,7 +177,12 @@ bool joystick_read_state(uint16_t *joyX, uint16_t *joyY, bool *pressed)
     if (pressed != NULL) {
         uint8_t btn = 0;
         bool btn_ok = joyc_i2c_read_bytes(0x30, &btn, 1);
-        *pressed = btn_ok && (btn != 0);
+        *pressed = btn_ok && joyc_button_decode_pressed(btn);
+        if (btn_ok && (!s_button_raw_seen || btn != s_last_button_raw)) {
+            ESP_LOGI(TAG, "button raw: reg30=0x%02x pressed=%d", btn, *pressed);
+            s_last_button_raw = btn;
+            s_button_raw_seen = true;
+        }
         if (!btn_ok && (now - s_last_read_fail_log) >= pdMS_TO_TICKS(JOY_READ_FAIL_LOG_MS)) {
             ESP_LOGW(TAG, "read warn: button via M5.Ex_I2C xy_ok=%d gpio0=%d gpio26=%d",
                      xy_ok, gpio_get_level(GPIO_NUM_0), gpio_get_level(GPIO_NUM_26));
@@ -240,7 +248,7 @@ void handle_setup_screen(void *pvParam)
             TickType_t now = xTaskGetTickCount();
             if ((now - last_setup_log) >= pdMS_TO_TICKS(JOY_SETUP_LOG_MS)) {
                 ESP_LOGI(TAG,
-                         "setup raw: ok=%d ready=%d x=%u y=%u btn=%d hid=%s hfp=%s audio=%s discoverable=%d gpio0=%d gpio26=%d",
+                         "setup raw: ok=%d ready=%d x=%u y=%u pressed=%d hid=%s hfp=%s audio=%s discoverable=%d gpio0=%d gpio26=%d",
                          read_ok, joystick_is_ready(), snapshot.joyX, snapshot.joyY,
                          snapshot.joy_pressed, bt_input_hid_status_text(), bt_input_hfp_status_text(),
                          bt_input_audio_status_text(), bt_input_is_discoverable(), gpio_get_level(GPIO_NUM_0),
@@ -292,7 +300,7 @@ void handle_running_screen(void *pvParam)
                 mouse_mode_active = true;
                 last_ui_update = 0;
                 last_mouse_log = 0;
-                ESP_LOGI(TAG, "mouse enter: read_ok=%d raw=(%u,%u) center=(%d,%d) btn=%d hid=%s",
+                ESP_LOGI(TAG, "mouse enter: read_ok=%d raw=(%u,%u) center=(%d,%d) pressed=%d hid=%s",
                          read_ok, snapshot.joyX, snapshot.joyY, mouse.center_x, mouse.center_y,
                          snapshot.joy_pressed, bt_input_hid_status_text());
             }
@@ -310,7 +318,7 @@ void handle_running_screen(void *pvParam)
                 mouse_controller_update(&mouse, joy_x, joy_y, snapshot.joy_pressed, last_pressed);
             if ((now - last_mouse_log) >= pdMS_TO_TICKS(JOY_MOUSE_LOG_MS)) {
                 ESP_LOGI(TAG,
-                         "mouse raw: ok=%d x=%u y=%u btn=%d center=(%d,%d)->(%d,%d) raw_delta=(%d,%d) report=(%d,%d,%u) send=%d hid=%d",
+                         "mouse raw: ok=%d x=%u y=%u pressed=%d center=(%d,%d)->(%d,%d) raw_delta=(%d,%d) report=(%d,%d,%u) send=%d hid=%d",
                          read_ok, snapshot.joyX, snapshot.joyY, snapshot.joy_pressed,
                          report.center_before_x, report.center_before_y, mouse.center_x, mouse.center_y,
                          (int16_t)(joy_x - mouse.center_x), (int16_t)(joy_y - mouse.center_y),

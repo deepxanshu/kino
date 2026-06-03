@@ -4,6 +4,7 @@ set(SOURCES
     bluetooth/bt_hid_mouse.c
     bluetooth/bt_input.c
     joystick/joyc_i2c_bridge.cpp
+    joystick/joyc_button.c
     joystick/mouse_controller.c
     joystick/joyc_soft_i2c.c
     joystick/joystick_handle.c
