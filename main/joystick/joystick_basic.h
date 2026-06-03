@@ -13,6 +13,8 @@
 extern "C" {
 #endif
 
+#define MODE_SWITCHING (4)
+
 typedef struct {
     int channel;
     int id;

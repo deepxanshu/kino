@@ -19,6 +19,7 @@ extern "C" {
 
 #define MIC_SAMPLE_RATE 8000
 #define MIC_SAMPLE_COUNT 160
+#define MIC_UI_UPDATE_MS 100
 
 static const char *TAG = "mic_screen";
 
@@ -92,6 +93,7 @@ void handle_mic_screen(void *pvParam)
     static int16_t samples[MIC_SAMPLE_COUNT];
     static mic_spectrum_data_t spectrum;
     static mic_spectrum_data_t empty_spectrum;
+    static TickType_t last_ui_update = 0;
     empty_spectrum.db = -90;
 
     while (1) {
@@ -123,15 +125,19 @@ void handle_mic_screen(void *pvParam)
 
         if (recorded && s_mic_active && joystick_data->screen_mode == MODE_MIC) {
             bt_input_hfp_feed_pcm(samples, MIC_SAMPLE_COUNT);
-            mic_spectrum_compute(samples, MIC_SAMPLE_COUNT, MIC_SAMPLE_RATE, MIC_BAR_MAX_HEIGHT, &spectrum);
-            update_mic_screen(&spectrum, joystick_data->bat, true, false,
-                              bt_input_hfp_connected(), bt_input_hfp_audio_connected());
+
+            TickType_t now = xTaskGetTickCount();
+            if ((now - last_ui_update) >= pdMS_TO_TICKS(MIC_UI_UPDATE_MS)) {
+                mic_spectrum_compute(samples, MIC_SAMPLE_COUNT, MIC_SAMPLE_RATE, MIC_BAR_MAX_HEIGHT, &spectrum);
+                update_mic_screen(&spectrum, joystick_data->bat, true, false,
+                                  bt_input_hfp_connected(), bt_input_hfp_audio_connected());
+                last_ui_update = now;
+            }
         } else {
             update_mic_screen(&empty_spectrum, joystick_data->bat, false, false,
                               bt_input_hfp_connected(), bt_input_hfp_audio_connected());
+            vTaskDelay(pdMS_TO_TICKS(10));
         }
         s_mic_busy = false;
-
-        vTaskDelay(pdMS_TO_TICKS(20));
     }
 }

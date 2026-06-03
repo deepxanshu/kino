@@ -56,14 +56,21 @@ static const char *mode_name(uint8_t mode)
         return "IMU";
     case MODE_MIC:
         return "Mic";
+    case MODE_SWITCHING:
+        return "Switching";
     default:
         return "Unknown";
     }
 }
 
+static bool mode_needs_joystick(uint8_t mode)
+{
+    return mode == MODE_SETUP || mode == MODE_RUNNING;
+}
+
 /**
  * @brief Handle Button Press.
- * 1. Press BtnA to switch setup/mouse/mic UI.
+ * 1. Press BtnA to switch setup/mouse/mic/imu UI.
  * 2. Click BtnB to enter pairing state on setup mode.
  * 3. Click BtnB to mute/unmute mic on mic mode.
  * 4. Hold BtnB 3s to reopen pairing; hold BtnB 8s to clear bonds and reboot.
@@ -75,36 +82,70 @@ static void enter_screen_mode(uint8_t next_mode)
              mode_name(current_mode), current_mode, mode_name(next_mode), next_mode, joystick_is_ready(),
              bt_input_hid_status_text(), bt_input_hfp_status_text(), bt_input_audio_status_text());
 
+    if (current_mode == next_mode) {
+        return;
+    }
+
+    joystick_data.screen_mode = MODE_SWITCHING;
+    vTaskDelay(pdMS_TO_TICKS(20));
+
     if (current_mode == MODE_MIC && next_mode != MODE_MIC) {
-        joystick_data.screen_mode = next_mode;
         ESP_LOGI(TAG, "mode action: exit mic before entering %s", mode_name(next_mode));
         mic_mode_exit();
-        reset_shared_port_a_pins(pdMS_TO_TICKS(50));
-        joystick_reinit();
-        ESP_LOGI(TAG, "mode action: joystick reinit done ready=%d", joystick_is_ready());
+        reset_shared_port_a_pins(pdMS_TO_TICKS(120));
 
-        switch_screen(joystick_data.screen_mode);
+        switch_screen(next_mode);
+        joystick_data.screen_mode = next_mode;
+        ESP_LOGI(TAG, "mode commit: %s(%u)", mode_name(joystick_data.screen_mode), joystick_data.screen_mode);
+        if (mode_needs_joystick(next_mode)) {
+            joystick_reinit();
+            ESP_LOGI(TAG, "mode action: joystick reinit done ready=%d", joystick_is_ready());
+        }
         return;
     }
 
     if (next_mode == MODE_MIC && current_mode != MODE_MIC) {
-        joystick_data.screen_mode = MODE_MIC;
         ESP_LOGI(TAG, "mode action: deinit joystick before mic ready=%d", joystick_is_ready());
         joystick_deinit();
         ESP_LOGI(TAG, "mode action: joystick deinit done ready=%d", joystick_is_ready());
-        reset_shared_port_a_pins(pdMS_TO_TICKS(20));
+        reset_shared_port_a_pins(pdMS_TO_TICKS(80));
         mic_mode_enter();
-        switch_screen(joystick_data.screen_mode);
+        switch_screen(MODE_MIC);
+        joystick_data.screen_mode = MODE_MIC;
+        ESP_LOGI(TAG, "mode commit: %s(%u)", mode_name(joystick_data.screen_mode), joystick_data.screen_mode);
         return;
     }
 
+    switch_screen(next_mode);
     joystick_data.screen_mode = next_mode;
-    switch_screen(joystick_data.screen_mode);
+    ESP_LOGI(TAG, "mode commit: %s(%u)", mode_name(joystick_data.screen_mode), joystick_data.screen_mode);
+    if (mode_needs_joystick(next_mode) && !joystick_is_ready()) {
+        ESP_LOGI(TAG, "mode action: target needs joystick, reinit ready=%d", joystick_is_ready());
+        joystick_reinit();
+        ESP_LOGI(TAG, "mode action: joystick reinit done ready=%d", joystick_is_ready());
+    }
+}
+
+static uint8_t next_screen_mode(uint8_t current_mode)
+{
+    switch (current_mode) {
+    case MODE_SETUP:
+        return MODE_RUNNING;
+    case MODE_RUNNING:
+        return MODE_MIC;
+    case MODE_MIC:
+        return MODE_IMU;
+    case MODE_IMU:
+        return MODE_SETUP;
+    case MODE_SWITCHING:
+        return MODE_SETUP;
+    default:
+        return MODE_SETUP;
+    }
 }
 
 void handle_button_press()
 {
-    static uint8_t screen_mode = MODE_SETUP;
     static bool wait_release = false;
     static bool btnb_pair_hold_done = false;
     static bool btnb_clear_hold_done = false;
@@ -144,13 +185,7 @@ void handle_button_press()
     }
 
     if (M5.BtnA.wasClicked()) {
-        if (joystick_data.screen_mode == MODE_SETUP) {
-            screen_mode = MODE_RUNNING;
-        } else if (joystick_data.screen_mode == MODE_RUNNING) {
-            screen_mode = MODE_MIC;
-        } else {
-            screen_mode = MODE_RUNNING;
-        }
+        uint8_t screen_mode = next_screen_mode(joystick_data.screen_mode);
         ESP_LOGI(TAG, "BtnA click: mode=%s target=%s A_pressed=%d B_pressed=%d gpio37=%d gpio39=%d",
                  mode_name(joystick_data.screen_mode), mode_name(screen_mode), M5.BtnA.isPressed(),
                  M5.BtnB.isPressed(), gpio_get_level(GPIO_NUM_37), gpio_get_level(GPIO_NUM_39));

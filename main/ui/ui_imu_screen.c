@@ -16,12 +16,11 @@ static lv_obj_t *cross_lines[2];  // 标识用的对角线
 static lv_point_t edge_points[12][2];  // 12条边，每条2个点
 static lv_point_t cross_points[2][2];  // 2条对角线，每条2个点
 
-lv_obj_t *imu_screen;
-lv_obj_t *cube_container = NULL;
-lv_obj_t *imu_battery_label;
-lv_obj_t *imu_channel_info_label;
-lv_obj_t *imu_id_info_label;
-lv_obj_t *imu_data_label;
+lv_obj_t *imu_screen        = NULL;
+lv_obj_t *cube_container    = NULL;
+lv_obj_t *imu_battery_label = NULL;
+lv_obj_t *imu_pitch_label   = NULL;
+lv_obj_t *imu_roll_label    = NULL;
 
 // 3D cube parameters
 typedef struct {
@@ -54,8 +53,7 @@ IMU_Angle_t g_imu_angle = {0.0f, 0.0f};
  * - 12 cube edge lines forming a 3D cube
  * - 2 diagonal cross lines for orientation reference
  * - Battery status label
- * - Channel information label
- * - Receiver ID label
+ * - Pitch and roll angle labels
  *
  * The function handles LVGL locking to ensure thread-safe operations.
  */
@@ -114,15 +112,15 @@ void create_imu_screen()
     lv_obj_align(imu_battery_label, LV_ALIGN_TOP_LEFT, 10, 160);
     lv_obj_set_style_text_font(imu_battery_label, &lv_font_montserrat_14, 0);
 
-    imu_channel_info_label = lv_label_create(imu_screen);
-    lv_label_set_text(imu_channel_info_label, "Channel: 1");
-    lv_obj_align(imu_channel_info_label, LV_ALIGN_TOP_LEFT, 10, 180);
-    lv_obj_set_style_text_font(imu_channel_info_label, &lv_font_montserrat_14, 0);
+    imu_pitch_label = lv_label_create(imu_screen);
+    lv_label_set_text(imu_pitch_label, "Pitch: 0");
+    lv_obj_align(imu_pitch_label, LV_ALIGN_TOP_LEFT, 10, 180);
+    lv_obj_set_style_text_font(imu_pitch_label, &lv_font_montserrat_14, 0);
 
-    imu_id_info_label = lv_label_create(imu_screen);
-    lv_label_set_text(imu_id_info_label, "Receiver ID:\n0(broadcast)");
-    lv_obj_align(imu_id_info_label, LV_ALIGN_TOP_LEFT, 10, 200);
-    lv_obj_set_style_text_font(imu_id_info_label, &lv_font_montserrat_14, 0);
+    imu_roll_label = lv_label_create(imu_screen);
+    lv_label_set_text(imu_roll_label, "Roll: 0");
+    lv_obj_align(imu_roll_label, LV_ALIGN_TOP_LEFT, 10, 200);
+    lv_obj_set_style_text_font(imu_roll_label, &lv_font_montserrat_14, 0);
 
     lvgl_port_unlock();
 }
@@ -177,7 +175,6 @@ void update_imu_cube(float ax, float ay, float az)
 
         // Roll
         float x2 = x1 * cos(roll) + z1 * sin(roll);
-        float z2 = -x1 * sin(roll) + z1 * cos(roll);
         float y2 = y1;
 
         // Orthographic projection
@@ -210,8 +207,7 @@ void update_imu_cube(float ax, float ay, float az)
  * This function updates the entire IMU screen with real-time data including:
  * - Updates the 3D cube visualization via update_imu_cube()
  * - Battery percentage display
- * - Communication channel information
- * - Receiver ID display (handles broadcast case)
+ * - Pitch and roll angle display
  *
  * Optimized to only update labels when values have changed using static tracking variables.
  *
@@ -219,18 +215,21 @@ void update_imu_cube(float ax, float ay, float az)
  * @param ay Accelerometer Y-axis reading
  * @param az Accelerometer Z-axis reading
  * @param bat Battery level percentage (0-100)
- * @param id Receiver ID (0 for broadcast)
- * @param channel ESP-NOW communication channel
  * @return IMU_Angle_t Current pitch and roll angles calculated from IMU data
  */
-IMU_Angle_t update_imu_screen(float ax, float ay, float az, uint8_t bat, uint8_t id, uint8_t channel)
+IMU_Angle_t update_imu_screen(float ax, float ay, float az, uint8_t bat)
 {
-    static uint8_t last_bat     = 0xFF;
-    static uint8_t last_id      = 0xFF;
-    static uint8_t last_channel = 0xFF;
+    static uint8_t last_bat       = 0xFF;
+    static int16_t last_pitch_deg = INT16_MIN;
+    static int16_t last_roll_deg  = INT16_MIN;
 
     while (!lvgl_port_lock()) {
         vTaskDelay(pdMS_TO_TICKS(10));
+    }
+
+    if (cube_container == NULL || !lv_obj_is_valid(cube_container)) {
+        lvgl_port_unlock();
+        return g_imu_angle;
     }
 
     update_imu_cube(ax, ay, az);
@@ -240,18 +239,17 @@ IMU_Angle_t update_imu_screen(float ax, float ay, float az, uint8_t bat, uint8_t
         last_bat = bat;
     }
 
-    if (imu_channel_info_label && channel != last_channel) {
-        lv_label_set_text_fmt(imu_channel_info_label, "Channel: %u", channel);
-        last_channel = channel;
+    int16_t pitch_deg = (int16_t)lroundf(g_imu_angle.pitch * 180.0f / (float)M_PI);
+    int16_t roll_deg  = (int16_t)lroundf(g_imu_angle.roll * 180.0f / (float)M_PI);
+
+    if (imu_pitch_label && pitch_deg != last_pitch_deg) {
+        lv_label_set_text_fmt(imu_pitch_label, "Pitch: %d", pitch_deg);
+        last_pitch_deg = pitch_deg;
     }
 
-    if (imu_id_info_label && id != last_id) {
-        if (id == 0) {
-            lv_label_set_text(imu_id_info_label, "Receiver ID:\n0(broadcast)");
-        } else {
-            lv_label_set_text_fmt(imu_id_info_label, "Receiver ID: %u", id);
-        }
-        last_id = id;
+    if (imu_roll_label && roll_deg != last_roll_deg) {
+        lv_label_set_text_fmt(imu_roll_label, "Roll: %d", roll_deg);
+        last_roll_deg = roll_deg;
     }
     lvgl_port_unlock();
     return g_imu_angle;
@@ -278,8 +276,8 @@ void ui_imu_screen_destory()
     }
     lvgl_port_unlock();
 
-    imu_battery_label      = NULL;
-    imu_channel_info_label = NULL;
-    imu_id_info_label      = NULL;
-    imu_data_label         = NULL;
+    cube_container    = NULL;
+    imu_battery_label = NULL;
+    imu_pitch_label   = NULL;
+    imu_roll_label    = NULL;
 }

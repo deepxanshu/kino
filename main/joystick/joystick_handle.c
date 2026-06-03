@@ -394,26 +394,10 @@ void handle_running_screen(void *pvParam)
 }
 
 /**
- * @brief Task to handle joystick IMU screen functionality, processing IMU sensor data and sending ESP-NOW control
- * packets
+ * @brief Task to keep the IMU visualization updated while the IMU page is active.
  *
- * This function runs an infinite loop that reads IMU sensor data (accelerometer and gyroscope),
- * updates the IMU visualization screen, processes the angle data to control remote devices,
- * and sends ESP-NOW packets with the processed control information.
- * The function maps the IMU pitch and roll angles to yaw and pitch values for remote control,
- * applies filtering to reduce unnecessary transmissions, and sends control packets at regular intervals.
- *
- * @param pvParam Pointer to joystick data structure containing IMU sensor values, battery level,
- *                device ID, communication channel, and other control parameters
- * @details
- *      1. Continuously reads IMU data (acceleration and gyro values) from the joystick_data structure
- *      2. Updates the IMU screen visualization with current sensor values
- *      3. Limits roll values to range [-1.5, 1.5] and pitch values to range [0, 1.5]
- *      4. Maps limited angle values to appropriate yaw/pitch ranges for remote control (-1280 to 1280 for yaw, 900 to 0
- * for pitch)
- *      5. Only sends control packets when changes exceed threshold (10 units) to minimize network traffic
- *      6. Constructs and transmits ESP-NOW packet with device ID, yaw, pitch, speed, and button status
- *      7. Includes a 50ms delay between iterations when in IMU mode, 200ms otherwise
+ * The main loop owns sensor sampling; this task only pushes the latest accelerometer
+ * values and battery level into the LVGL IMU screen.
  */
 void handle_imu_screen(void *pvParam)
 {
@@ -422,7 +406,7 @@ void handle_imu_screen(void *pvParam)
     while (1) {
         if (joystick_data->screen_mode == MODE_IMU) {
             update_imu_screen(joystick_data->accel_x, joystick_data->accel_y, joystick_data->accel_z,
-                              joystick_data->bat, joystick_data->id, joystick_data->channel);
+                              joystick_data->bat);
 
             vTaskDelay(30 / portTICK_PERIOD_MS);
         } else {
