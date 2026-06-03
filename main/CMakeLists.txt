@@ -14,6 +14,7 @@ set(SOURCES
     ui/ui_setup_screen.c
     ui/ui_imu_screen.c
     ui/ui_mic_screen.c
+    ui/ui_theme.c
     ui/ui.c
     ui/updown_img.c
     lvgl_port.cpp

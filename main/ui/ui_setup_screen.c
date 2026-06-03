@@ -6,6 +6,7 @@
 #include "ui_setup_screen.h"
 #include "../bluetooth/bt_input.h"
 #include "../lvgl_port.h"
+#include "ui_theme.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -29,6 +30,7 @@ static lv_obj_t *create_status_label(lv_obj_t *parent, int y, const char *text)
     lv_obj_set_width(label, 125);
     lv_obj_align(label, LV_ALIGN_TOP_LEFT, 8, y);
     lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
+    ui_theme_apply_label(label);
     return label;
 }
 
@@ -65,11 +67,13 @@ void create_setup_screen(void)
     }
 
     lv_obj_clear_flag(setup_screen, LV_OBJ_FLAG_SCROLLABLE);
+    ui_theme_apply_screen(setup_screen);
 
     lv_obj_t *label = lv_label_create(setup_screen);
     lv_label_set_text(label, "JoyMic");
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 10);
     lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
+    ui_theme_apply_label(label);
 
     setup_device_label = create_status_label(setup_screen, 40, "StickC JoyMic");
     setup_mouse_label  = create_status_label(setup_screen, 68, "Mouse: INIT");

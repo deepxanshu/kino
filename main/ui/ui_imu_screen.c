@@ -8,6 +8,7 @@
 #include "lvgl.h"
 #include <math.h>
 #include "../lvgl_port.h"
+#include "ui_theme.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -73,12 +74,14 @@ void create_imu_screen(void)
         return;
     }
     lv_obj_clear_flag(imu_screen, LV_OBJ_FLAG_SCROLLABLE);
+    ui_theme_apply_screen(imu_screen);
 
     // Create title
     lv_obj_t *label = lv_label_create(imu_screen);
     lv_label_set_text(label, "JoyMic");
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 10);
     lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
+    ui_theme_apply_label(label);
 
     // create container
     cube_container = lv_obj_create(imu_screen);
@@ -93,7 +96,7 @@ void create_imu_screen(void)
     for (int i = 0; i < 12; i++) {
         edge_lines[i] = lv_line_create(cube_container);
         lv_obj_set_style_line_width(edge_lines[i], 2, 0);
-        lv_obj_set_style_line_color(edge_lines[i], lv_color_black(), 0);
+        lv_obj_set_style_line_color(edge_lines[i], ui_theme_fg_color(), 0);
         lv_obj_add_flag(edge_lines[i], LV_OBJ_FLAG_FLOATING);
 
         // Add default coordinate points to avoid empty line segments
@@ -118,16 +121,19 @@ void create_imu_screen(void)
     lv_label_set_text(imu_battery_label, "Bat: 100%");
     lv_obj_align(imu_battery_label, LV_ALIGN_TOP_LEFT, 10, 160);
     lv_obj_set_style_text_font(imu_battery_label, &lv_font_montserrat_14, 0);
+    ui_theme_apply_label(imu_battery_label);
 
     imu_pitch_label = lv_label_create(imu_screen);
     lv_label_set_text(imu_pitch_label, "Pitch: 0");
     lv_obj_align(imu_pitch_label, LV_ALIGN_TOP_LEFT, 10, 180);
     lv_obj_set_style_text_font(imu_pitch_label, &lv_font_montserrat_14, 0);
+    ui_theme_apply_label(imu_pitch_label);
 
     imu_roll_label = lv_label_create(imu_screen);
     lv_label_set_text(imu_roll_label, "Roll: 0");
     lv_obj_align(imu_roll_label, LV_ALIGN_TOP_LEFT, 10, 200);
     lv_obj_set_style_text_font(imu_roll_label, &lv_font_montserrat_14, 0);
+    ui_theme_apply_label(imu_roll_label);
 
     lvgl_port_unlock();
 }

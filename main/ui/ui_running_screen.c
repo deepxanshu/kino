@@ -5,6 +5,7 @@
  */
 #include "ui_running_screen.h"
 #include "../lvgl_port.h"
+#include "ui_theme.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
@@ -59,6 +60,7 @@ void create_running_screen(void)
     }
 
     lv_obj_clear_flag(running_screen, LV_OBJ_FLAG_SCROLLABLE);
+    ui_theme_apply_screen(running_screen);
 
     // Create title
     lv_obj_t* label = lv_label_create(running_screen);
@@ -66,6 +68,7 @@ void create_running_screen(void)
     lv_label_set_text(label, "JoyMic");
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 10);
     lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
+    ui_theme_apply_label(label);
 
     // Create joystick area
     joystick_area = lv_obj_create(running_screen);
@@ -74,8 +77,7 @@ void create_running_screen(void)
 
     // Set joystick area style
     lv_obj_set_style_border_width(joystick_area, 2, LV_PART_MAIN);
-    lv_obj_set_style_border_color(joystick_area, lv_color_black(), LV_PART_MAIN);
-    lv_obj_set_style_bg_color(joystick_area, lv_color_white(), LV_PART_MAIN);
+    ui_theme_apply_panel(joystick_area);
     lv_obj_set_style_pad_all(joystick_area, 0, LV_PART_MAIN);
     lv_obj_clear_flag(joystick_area, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -83,14 +85,14 @@ void create_running_screen(void)
     lv_obj_t* cross_line_h        = lv_line_create(joystick_area);
     static lv_point_t points_h[2] = {{0, 57}, {115, 57}};  // Horizontal center line
     lv_line_set_points(cross_line_h, points_h, 2);
-    lv_obj_set_style_line_color(cross_line_h, lv_color_make(64, 64, 64), 0);
+    lv_obj_set_style_line_color(cross_line_h, ui_theme_grid_color(), 0);
     lv_obj_set_style_line_width(cross_line_h, 1, 0);
 
     // Add vertical crosshair line
     lv_obj_t* cross_line_v        = lv_line_create(joystick_area);
     static lv_point_t points_v[2] = {{56, 0}, {56, 115}};  // Vertical center line
     lv_line_set_points(cross_line_v, points_v, 2);
-    lv_obj_set_style_line_color(cross_line_v, lv_color_make(64, 64, 64), 0);
+    lv_obj_set_style_line_color(cross_line_v, ui_theme_grid_color(), 0);
     lv_obj_set_style_line_width(cross_line_v, 1, 0);
 
     // Create joystick dot
@@ -106,16 +108,19 @@ void create_running_screen(void)
     lv_label_set_text(battery_label, "Bat: 100%%");
     lv_obj_align(battery_label, LV_ALIGN_TOP_LEFT, 10, 160);
     lv_obj_set_style_text_font(battery_label, &lv_font_montserrat_14, 0);
+    ui_theme_apply_label(battery_label);
 
     mouse_info_label = lv_label_create(running_screen);
     lv_label_set_text(mouse_info_label, "Mouse: WAIT");
     lv_obj_align(mouse_info_label, LV_ALIGN_TOP_LEFT, 10, 180);
     lv_obj_set_style_text_font(mouse_info_label, &lv_font_montserrat_14, 0);
+    ui_theme_apply_label(mouse_info_label);
 
     click_info_label = lv_label_create(running_screen);
     lv_label_set_text(click_info_label, "Click: UP");
     lv_obj_align(click_info_label, LV_ALIGN_TOP_LEFT, 10, 200);
     lv_obj_set_style_text_font(click_info_label, &lv_font_montserrat_14, 0);
+    ui_theme_apply_label(click_info_label);
 
     lvgl_port_unlock();
 }

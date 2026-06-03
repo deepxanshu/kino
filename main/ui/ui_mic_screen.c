@@ -10,6 +10,7 @@
 #include "esp_log.h"
 #include "lvgl.h"
 #include "../lvgl_port.h"
+#include "ui_theme.h"
 
 #define MIC_BAR_COUNT MIC_SPECTRUM_BANDS
 #define MIC_AREA_SIZE 115
@@ -35,7 +36,7 @@ static void create_grid_line(lv_obj_t *parent, int index)
 {
     lv_obj_t *line           = lv_line_create(parent);
     lv_line_set_points(line, s_grid_points[index], 2);
-    lv_obj_set_style_line_color(line, lv_color_make(210, 210, 210), 0);
+    lv_obj_set_style_line_color(line, ui_theme_grid_color(), 0);
     lv_obj_set_style_line_width(line, 1, 0);
 }
 
@@ -62,18 +63,19 @@ void create_mic_screen(void)
     }
 
     lv_obj_clear_flag(mic_screen, LV_OBJ_FLAG_SCROLLABLE);
+    ui_theme_apply_screen(mic_screen);
 
     lv_obj_t *label = lv_label_create(mic_screen);
     lv_label_set_text(label, "JoyMic");
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 10);
     lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
+    ui_theme_apply_label(label);
 
     mic_spectrum_area = lv_obj_create(mic_screen);
     lv_obj_set_size(mic_spectrum_area, MIC_AREA_SIZE, MIC_AREA_SIZE);
     lv_obj_align(mic_spectrum_area, LV_ALIGN_TOP_MID, 0, 35);
     lv_obj_set_style_border_width(mic_spectrum_area, 2, LV_PART_MAIN);
-    lv_obj_set_style_border_color(mic_spectrum_area, lv_color_black(), LV_PART_MAIN);
-    lv_obj_set_style_bg_color(mic_spectrum_area, lv_color_white(), LV_PART_MAIN);
+    ui_theme_apply_panel(mic_spectrum_area);
     lv_obj_set_style_pad_all(mic_spectrum_area, 0, LV_PART_MAIN);
     lv_obj_clear_flag(mic_spectrum_area, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -85,7 +87,7 @@ void create_mic_screen(void)
     for (int i = 0; i < MIC_BAR_COUNT; i++) {
         s_mic_bars[i] = lv_obj_create(mic_spectrum_area);
         lv_obj_set_size(s_mic_bars[i], MIC_BAR_WIDTH, 1);
-        lv_obj_set_style_bg_color(s_mic_bars[i], lv_color_black(), LV_PART_MAIN);
+        lv_obj_set_style_bg_color(s_mic_bars[i], ui_theme_fg_color(), LV_PART_MAIN);
         lv_obj_set_style_border_width(s_mic_bars[i], 0, LV_PART_MAIN);
         lv_obj_set_style_radius(s_mic_bars[i], 0, LV_PART_MAIN);
         lv_obj_align(s_mic_bars[i], LV_ALIGN_TOP_LEFT, start_x + i * (MIC_BAR_WIDTH + MIC_BAR_GAP), MIC_BAR_BASE_Y);
@@ -96,21 +98,25 @@ void create_mic_screen(void)
     lv_label_set_text(mic_battery_label, "Bat: 100%");
     lv_obj_align(mic_battery_label, LV_ALIGN_TOP_LEFT, 10, 160);
     lv_obj_set_style_text_font(mic_battery_label, &lv_font_montserrat_14, 0);
+    ui_theme_apply_label(mic_battery_label);
 
     mic_status_label = lv_label_create(mic_screen);
     lv_label_set_text(mic_status_label, "Mic: OFF");
     lv_obj_align(mic_status_label, LV_ALIGN_TOP_LEFT, 10, 180);
     lv_obj_set_style_text_font(mic_status_label, &lv_font_montserrat_14, 0);
+    ui_theme_apply_label(mic_status_label);
 
     mic_level_label = lv_label_create(mic_screen);
     lv_label_set_text(mic_level_label, "Level: -90 dB");
     lv_obj_align(mic_level_label, LV_ALIGN_TOP_LEFT, 10, 200);
     lv_obj_set_style_text_font(mic_level_label, &lv_font_montserrat_14, 0);
+    ui_theme_apply_label(mic_level_label);
 
     mic_bt_label = lv_label_create(mic_screen);
     lv_label_set_text(mic_bt_label, "HFP:WAIT A:OFF");
     lv_obj_align(mic_bt_label, LV_ALIGN_TOP_LEFT, 10, 220);
     lv_obj_set_style_text_font(mic_bt_label, &lv_font_montserrat_14, 0);
+    ui_theme_apply_label(mic_bt_label);
 
     lvgl_port_unlock();
 }
