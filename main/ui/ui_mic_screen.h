@@ -20,7 +20,7 @@ void create_mic_screen(void);
 bool ui_mic_screen_is_ready(void);
 bool ui_mic_screen_load(bool animated);
 void update_mic_screen(const mic_spectrum_data_t *spectrum, uint8_t bat, bool running, bool muted,
-                       bool hfp_connected, bool audio_connected);
+                       uint32_t sample_rate, bool hfp_connected, bool audio_connected);
 void ui_mic_screen_destory(void);
 
 #ifdef __cplusplus

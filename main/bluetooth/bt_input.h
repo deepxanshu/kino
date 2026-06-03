@@ -26,6 +26,8 @@ bool bt_input_is_discoverable(void);
 const char *bt_input_hid_status_text(void);
 const char *bt_input_hfp_status_text(void);
 const char *bt_input_audio_status_text(void);
+const char *bt_input_hfp_codec_text(void);
+uint32_t bt_input_hfp_pcm_sample_rate(void);
 
 void bt_input_set_discoverable(bool discoverable);
 void bt_input_clear_bonds(void);

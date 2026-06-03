@@ -9,6 +9,7 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "lvgl.h"
+#include <inttypes.h>
 #include "../lvgl_port.h"
 #include "ui_theme.h"
 
@@ -150,7 +151,7 @@ bool ui_mic_screen_load(bool animated)
 }
 
 void update_mic_screen(const mic_spectrum_data_t *spectrum, uint8_t bat, bool running, bool muted,
-                       bool hfp_connected, bool audio_connected)
+                       uint32_t sample_rate, bool hfp_connected, bool audio_connected)
 {
     if (spectrum == NULL) {
         return;
@@ -189,7 +190,11 @@ void update_mic_screen(const mic_spectrum_data_t *spectrum, uint8_t bat, bool ru
         if (muted) {
             lv_label_set_text(mic_status_label, "Mic: PAUSE");
         } else {
-            lv_label_set_text(mic_status_label, running ? "Mic: ON 8k" : "Mic: OFF");
+            if (running) {
+                lv_label_set_text_fmt(mic_status_label, "Mic: ON %" PRIu32 "k", sample_rate / 1000);
+            } else {
+                lv_label_set_text(mic_status_label, "Mic: OFF");
+            }
         }
     }
     if (mic_level_label != NULL) {
