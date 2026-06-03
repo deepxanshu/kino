@@ -6,6 +6,7 @@
 #include "bt_input.h"
 
 #include <inttypes.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "esp_bt.h"
@@ -64,9 +65,11 @@ typedef struct {
     bool hfp_ready;
     bool hfp_slc_connected;
     bool hfp_audio_connected;
+    bool hfp_has_peer;
     bool discoverable;
     bool mic_enabled;
     uint8_t protocol_mode;
+    esp_bd_addr_t hfp_peer_bda;
     uint8_t mouse_report[HID_MOUSE_REPORT_SIZE];
     SemaphoreHandle_t lock;
     RingbufHandle_t audio_rb;
@@ -78,7 +81,7 @@ static bt_input_state_t s_state = {
 };
 
 static esp_hidd_app_param_t s_hid_app = {
-    .name          = "JoyMouse",
+    .name          = BT_INPUT_DEVICE_NAME,
     .description   = "StickC JoyMic Mouse",
     .provider      = "M5Stack",
     .subclass      = ESP_HID_CLASS_MIC,
@@ -100,6 +103,17 @@ static void bt_input_unlock(void)
     if (s_state.lock != NULL) {
         xSemaphoreGive(s_state.lock);
     }
+}
+
+static char *bt_input_bda_to_str(const esp_bd_addr_t bda, char *str, size_t size)
+{
+    if (bda == NULL || str == NULL || size < 18) {
+        return NULL;
+    }
+
+    snprintf(str, size, "%02x:%02x:%02x:%02x:%02x:%02x",
+             bda[0], bda[1], bda[2], bda[3], bda[4], bda[5]);
+    return str;
 }
 
 static void bt_input_update_scan_mode(void)
@@ -135,7 +149,9 @@ static void bt_input_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *
     switch (event) {
     case ESP_BT_GAP_AUTH_CMPL_EVT:
         if (param->auth_cmpl.stat == ESP_BT_STATUS_SUCCESS) {
-            ESP_LOGI(TAG, "BT auth success: %s", param->auth_cmpl.device_name);
+            char bda[18] = {0};
+            ESP_LOGI(TAG, "BT auth success: %s [%s]", param->auth_cmpl.device_name,
+                     bt_input_bda_to_str(param->auth_cmpl.bda, bda, sizeof(bda)));
             s_state.discoverable = false;
             bt_input_update_scan_mode();
         } else {
@@ -158,6 +174,12 @@ static void bt_input_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *
     case ESP_BT_GAP_MODE_CHG_EVT:
         ESP_LOGI(TAG, "BT scan mode changed: %d", param->mode_chg.mode);
         break;
+    case ESP_BT_GAP_REMOVE_BOND_DEV_COMPLETE_EVT: {
+        char bda[18] = {0};
+        ESP_LOGI(TAG, "BT remove bond status=%d bda=%s", param->remove_bond_dev_cmpl.status,
+                 bt_input_bda_to_str(param->remove_bond_dev_cmpl.bda, bda, sizeof(bda)));
+        break;
+    }
     default:
         break;
     }
@@ -223,13 +245,23 @@ static void bt_input_hfp_cb(esp_hf_client_cb_event_t event, esp_hf_client_cb_par
         ESP_LOGI(TAG, "HFP profile state: %d", param->prof_stat.state);
         break;
     case ESP_HF_CLIENT_CONNECTION_STATE_EVT:
+        if (param->conn_stat.state == ESP_HF_CLIENT_CONNECTION_STATE_CONNECTED ||
+            param->conn_stat.state == ESP_HF_CLIENT_CONNECTION_STATE_SLC_CONNECTED) {
+            memcpy(s_state.hfp_peer_bda, param->conn_stat.remote_bda, sizeof(s_state.hfp_peer_bda));
+            s_state.hfp_has_peer = true;
+        }
         s_state.hfp_slc_connected = (param->conn_stat.state == ESP_HF_CLIENT_CONNECTION_STATE_SLC_CONNECTED);
+        if (s_state.hfp_slc_connected) {
+            esp_hf_client_volume_update(ESP_HF_VOLUME_CONTROL_TARGET_MIC, 15);
+        }
         if (param->conn_stat.state == ESP_HF_CLIENT_CONNECTION_STATE_DISCONNECTED) {
             s_state.hfp_slc_connected = false;
             s_state.hfp_audio_connected = false;
+            s_state.hfp_has_peer = false;
             bt_input_audio_close();
         }
-        ESP_LOGI(TAG, "HFP connection state: %d", param->conn_stat.state);
+        ESP_LOGI(TAG, "HFP connection state: %d peer_feat=0x%" PRIx32 " chld=0x%" PRIx32,
+                 param->conn_stat.state, param->conn_stat.peer_feat, param->conn_stat.chld_feat);
         break;
     case ESP_HF_CLIENT_AUDIO_STATE_EVT:
         if (param->audio_stat.state == ESP_HF_CLIENT_AUDIO_STATE_CONNECTED ||
@@ -275,8 +307,11 @@ static void bt_input_hidd_cb(esp_hidd_cb_event_t event, esp_hidd_cb_param_t *par
         if (param->open.status == ESP_HIDD_SUCCESS) {
             s_state.hid_connected = (param->open.conn_status == ESP_HIDD_CONN_STATE_CONNECTED);
             if (s_state.hid_connected) {
+                char bda[18] = {0};
                 s_state.discoverable = false;
                 bt_input_update_scan_mode();
+                ESP_LOGI(TAG, "HID connected peer=%s",
+                         bt_input_bda_to_str(param->open.bd_addr, bda, sizeof(bda)));
             }
         }
         ESP_LOGI(TAG, "HID open state: %d status: %d", param->open.conn_status, param->open.status);
@@ -285,6 +320,13 @@ static void bt_input_hidd_cb(esp_hidd_cb_event_t event, esp_hidd_cb_param_t *par
         s_state.hid_connected = false;
         memset(s_state.mouse_report, 0, sizeof(s_state.mouse_report));
         ESP_LOGI(TAG, "HID close state: %d status: %d", param->close.conn_status, param->close.status);
+        break;
+    case ESP_HIDD_SEND_REPORT_EVT:
+        if (param->send_report.status != ESP_HIDD_SUCCESS) {
+            ESP_LOGW(TAG, "HID send report failed status=%d reason=%u type=%u id=%u",
+                     param->send_report.status, param->send_report.reason,
+                     param->send_report.report_type, param->send_report.report_id);
+        }
         break;
     case ESP_HIDD_GET_REPORT_EVT:
         ESP_LOGI(TAG, "HID get report id=%u type=%u protocol=%u", param->get_report.report_id,
@@ -307,7 +349,7 @@ static void bt_input_hidd_cb(esp_hidd_cb_event_t event, esp_hidd_cb_param_t *par
         s_state.hid_connected = false;
         s_state.discoverable = true;
         bt_input_update_scan_mode();
-        ESP_LOGI(TAG, "HID virtual cable unplugged");
+        ESP_LOGI(TAG, "HID virtual cable unplugged status=%d", param->vc_unplug.status);
         break;
     default:
         break;
@@ -392,7 +434,10 @@ void bt_input_init(void)
     s_state.bt_ready = true;
     bt_input_update_scan_mode();
 
-    ESP_LOGI(TAG, "BT ready, name=%s", BT_INPUT_DEVICE_NAME);
+    char bda[18] = {0};
+    ESP_LOGI(TAG, "BT ready, name=%s addr=%s bonds=%d", BT_INPUT_DEVICE_NAME,
+             bt_input_bda_to_str((const uint8_t *)esp_bt_dev_get_address(), bda, sizeof(bda)),
+             esp_bt_gap_get_bond_device_num());
 }
 
 bool bt_input_is_ready(void)
@@ -456,6 +501,54 @@ void bt_input_set_discoverable(bool discoverable)
              s_state.hfp_slc_connected);
 }
 
+void bt_input_clear_bonds(void)
+{
+    if (!s_state.bt_ready) {
+        ESP_LOGW(TAG, "clear bonds skipped: BT not ready");
+        return;
+    }
+
+    if (s_state.hid_ready) {
+        esp_err_t unplug_ret = esp_bt_hid_device_virtual_cable_unplug();
+        ESP_LOGI(TAG, "HID virtual cable unplug request: %s", esp_err_to_name(unplug_ret));
+    }
+
+    int dev_num = esp_bt_gap_get_bond_device_num();
+    if (dev_num <= 0) {
+        ESP_LOGI(TAG, "clear bonds: no bonded BR/EDR device");
+        s_state.discoverable = true;
+        bt_input_update_scan_mode();
+        return;
+    }
+
+    esp_bd_addr_t *dev_list = (esp_bd_addr_t *)calloc(dev_num, sizeof(esp_bd_addr_t));
+    if (dev_list == NULL) {
+        ESP_LOGE(TAG, "clear bonds: alloc failed num=%d", dev_num);
+        return;
+    }
+
+    int list_num = dev_num;
+    esp_err_t ret = esp_bt_gap_get_bond_device_list(&list_num, dev_list);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "clear bonds: get list failed: %s", esp_err_to_name(ret));
+        free(dev_list);
+        return;
+    }
+
+    for (int i = 0; i < list_num; ++i) {
+        char bda[18] = {0};
+        ESP_LOGI(TAG, "clear bonds: remove %s", bt_input_bda_to_str(dev_list[i], bda, sizeof(bda)));
+        ret = esp_bt_gap_remove_bond_device(dev_list[i]);
+        if (ret != ESP_OK) {
+            ESP_LOGW(TAG, "clear bonds: remove failed %s ret=%s", bda, esp_err_to_name(ret));
+        }
+    }
+    free(dev_list);
+
+    s_state.discoverable = true;
+    bt_input_update_scan_mode();
+}
+
 void bt_input_mouse_send(uint8_t buttons, int8_t dx, int8_t dy, int8_t wheel)
 {
     static TickType_t last_drop_log = 0;
@@ -498,6 +591,31 @@ void bt_input_hfp_mic_set_enabled(bool enabled)
     if (!enabled) {
         bt_input_hfp_audio_reset();
     }
+}
+
+void bt_input_hfp_audio_request(void)
+{
+    if (!s_state.hfp_slc_connected || !s_state.hfp_has_peer) {
+        ESP_LOGI(TAG, "HFP audio request skipped: slc=%d has_peer=%d", s_state.hfp_slc_connected,
+                 s_state.hfp_has_peer);
+        return;
+    }
+    if (s_state.hfp_audio_connected) {
+        return;
+    }
+
+    esp_err_t ret = esp_hf_client_connect_audio(s_state.hfp_peer_bda);
+    ESP_LOGI(TAG, "HFP audio request: %s", esp_err_to_name(ret));
+}
+
+void bt_input_hfp_audio_disconnect(void)
+{
+    if (!s_state.hfp_has_peer || !s_state.hfp_audio_connected) {
+        return;
+    }
+
+    esp_err_t ret = esp_hf_client_disconnect_audio(s_state.hfp_peer_bda);
+    ESP_LOGI(TAG, "HFP audio disconnect: %s", esp_err_to_name(ret));
 }
 
 void bt_input_hfp_audio_reset(void)

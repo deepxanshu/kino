@@ -29,9 +29,12 @@ const char *bt_input_hfp_status_text(void);
 const char *bt_input_audio_status_text(void);
 
 void bt_input_set_discoverable(bool discoverable);
+void bt_input_clear_bonds(void);
 void bt_input_mouse_send(uint8_t buttons, int8_t dx, int8_t dy, int8_t wheel);
 
 void bt_input_hfp_mic_set_enabled(bool enabled);
+void bt_input_hfp_audio_request(void);
+void bt_input_hfp_audio_disconnect(void);
 void bt_input_hfp_audio_reset(void);
 void bt_input_hfp_feed_pcm(const int16_t *samples, size_t sample_count);
 

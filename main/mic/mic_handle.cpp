@@ -49,6 +49,9 @@ void mic_mode_enter(void)
     s_mic_active = M5.Mic.begin();
     bt_input_hfp_mic_set_enabled(s_mic_active);
     bt_input_hfp_audio_reset();
+    if (s_mic_active) {
+        bt_input_hfp_audio_request();
+    }
     ESP_LOGI(TAG, "Mic %s", s_mic_active ? "started" : "failed to start");
 }
 
@@ -57,6 +60,7 @@ void mic_mode_exit(void)
     s_mic_active = false;
     s_mic_muted  = true;
     bt_input_hfp_mic_set_enabled(false);
+    bt_input_hfp_audio_disconnect();
 
     M5.Mic.end();
 

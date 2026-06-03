@@ -64,8 +64,9 @@ static const char *mode_name(uint8_t mode)
 /**
  * @brief Handle Button Press.
  * 1. Press BtnA to switch setup/mouse/mic UI.
- * 2. Press BtnB to enter pairing state on setup mode.
- * 3. Press BtnB to mute/unmute mic on mic mode.
+ * 2. Click BtnB to enter pairing state on setup mode.
+ * 3. Click BtnB to mute/unmute mic on mic mode.
+ * 4. Hold BtnB 3s to reopen pairing; hold BtnB 8s to clear bonds and reboot.
  */
 static void enter_screen_mode(uint8_t next_mode)
 {
@@ -105,9 +106,31 @@ void handle_button_press()
 {
     static uint8_t screen_mode = MODE_SETUP;
     static bool wait_release = false;
+    static bool btnb_pair_hold_done = false;
+    static bool btnb_clear_hold_done = false;
     static TickType_t cooldown_until = 0;
 
     TickType_t now = xTaskGetTickCount();
+    if (M5.BtnB.isPressed()) {
+        if (!btnb_clear_hold_done && M5.BtnB.pressedFor(8000)) {
+            btnb_clear_hold_done = true;
+            ESP_LOGW(TAG, "BtnB hold 8s: clear BT bonds and restart");
+            bt_input_clear_bonds();
+            vTaskDelay(pdMS_TO_TICKS(300));
+            esp_restart();
+            return;
+        }
+        if (!btnb_pair_hold_done && M5.BtnB.pressedFor(3000)) {
+            btnb_pair_hold_done = true;
+            ESP_LOGI(TAG, "BtnB hold 3s: enter pairing mode");
+            bt_input_set_discoverable(true);
+            return;
+        }
+    } else {
+        btnb_pair_hold_done = false;
+        btnb_clear_hold_done = false;
+    }
+
     if (wait_release) {
         if (!M5.BtnA.isPressed() && !M5.BtnB.isPressed()) {
             wait_release = false;
