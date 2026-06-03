@@ -31,6 +31,7 @@
 #define HFP_AUDIO_TX_TIMER_US 1000
 #define HFP_AUDIO_PREBUFFER_BYTES 960
 #define HFP_AUDIO_RETRY_MS 1500
+#define HFP_AUDIO_CONNECT_TIMEOUT_MS 3000
 #define HFP_PACKET_STATS_LOG_MS 2000
 #define HID_DROP_LOG_MS 1000
 
@@ -58,6 +59,7 @@ typedef struct {
     uint16_t hfp_sync_conn_handle;
     TickType_t hfp_last_pkt_stat_req;
     TickType_t hfp_next_audio_req;
+    TickType_t hfp_audio_connect_started;
     uint32_t hfp_audio_req_attempts;
     uint8_t mouse_report[BT_HID_MOUSE_REPORT_SIZE];
     SemaphoreHandle_t lock;
@@ -108,12 +110,6 @@ static uint32_t bt_input_hfp_pcm_bytes_per_second(void)
 static uint32_t bt_input_hfp_default_packet_len(void)
 {
     return s_state.hfp_audio_msbc ? HFP_AUDIO_MSBC_PCM_PACKET_LEN : HFP_AUDIO_CVSD_PACKET_LEN;
-}
-
-static bool bt_input_hfp_peer_supports_vrec(void)
-{
-    return s_state.hfp_slc_connected && s_state.hfp_has_peer &&
-           ((s_state.hfp_peer_features & ESP_HF_CLIENT_PEER_FEAT_VREC) != 0);
 }
 
 static void bt_input_lock(void)
@@ -309,16 +305,29 @@ static bool bt_input_hfp_fifo_read(uint8_t *data, size_t len)
     return ok;
 }
 
-static void bt_input_hfp_fill_last_sample(uint8_t *buf, uint32_t len)
+static void bt_input_hfp_fill_fade_silence(uint8_t *buf, uint32_t len)
 {
-    uint16_t sample = (uint16_t)s_hfp_last_sample;
-    for (uint32_t i = 0; i + 1 < len; i += 2) {
-        buf[i] = (uint8_t)(sample & 0xff);
-        buf[i + 1] = (uint8_t)(sample >> 8);
+    uint32_t sample_count = len / sizeof(int16_t);
+    if (sample_count == 0) {
+        if (len > 0) {
+            memset(buf, 0, len);
+        }
+        s_hfp_last_sample = 0;
+        return;
+    }
+
+    int32_t last = s_hfp_last_sample;
+    for (uint32_t i = 0; i < sample_count; i++) {
+        int32_t sample = (last * (int32_t)(sample_count - i)) / (int32_t)(sample_count + 1);
+        uint16_t packed = (uint16_t)(int16_t)sample;
+        uint32_t offset = i * sizeof(int16_t);
+        buf[offset] = (uint8_t)(packed & 0xff);
+        buf[offset + 1] = (uint8_t)(packed >> 8);
     }
     if ((len & 1U) != 0) {
         buf[len - 1] = 0;
     }
+    s_hfp_last_sample = 0;
 }
 
 static void bt_input_hfp_remember_last_sample(const uint8_t *buf, uint32_t len)
@@ -339,11 +348,11 @@ static void bt_input_hfp_log_audio_stats(const char *reason)
     s_hfp_last_stats_log = now;
 
     ESP_LOGI(TAG,
-             "HFP audio stats %s: slc=%d audio=%d mic=%d open=%d codec=%s rate=%" PRIu32
+             "HFP audio stats %s: slc=%d audio=%d connecting=%d mic=%d open=%d codec=%s rate=%" PRIu32
              " sync=0x%04x pkt=%" PRIu32 " used=%u feed=%" PRIu32 "/%" PRIu32 "B cb=%" PRIu32 "/%" PRIu32
              "B tick=%" PRIu32 " underrun=%" PRIu32 " budget0=%" PRIu32 " drop=%" PRIu32,
-             reason, s_state.hfp_slc_connected, s_state.hfp_audio_connected, s_state.mic_enabled,
-             s_state.audio_open, bt_input_hfp_codec_text(), bt_input_hfp_pcm_sample_rate(), s_state.hfp_sync_conn_handle,
+             reason, s_state.hfp_slc_connected, s_state.hfp_audio_connected, s_state.hfp_audio_connecting,
+             s_state.mic_enabled, s_state.audio_open, bt_input_hfp_codec_text(), bt_input_hfp_pcm_sample_rate(), s_state.hfp_sync_conn_handle,
              s_hfp_tx_packet_len, (unsigned)s_hfp_audio_used,
              s_hfp_feed_calls, s_hfp_feed_bytes, s_hfp_cb_calls, s_hfp_cb_bytes, s_hfp_timer_ticks,
              s_hfp_cb_underruns, s_hfp_cb_budget_empty, s_hfp_feed_drops);
@@ -386,20 +395,35 @@ static bool bt_input_hfp_audio_request_internal(const char *reason)
     if (!s_state.hfp_slc_connected || !s_state.hfp_has_peer) {
         return false;
     }
-    if (s_state.hfp_audio_connected || s_state.hfp_audio_connecting) {
+    if (s_state.hfp_audio_connected) {
         return true;
     }
 
     TickType_t now = xTaskGetTickCount();
+    if (s_state.hfp_audio_connecting) {
+        if (s_state.hfp_audio_connect_started != 0 &&
+            (now - s_state.hfp_audio_connect_started) >= pdMS_TO_TICKS(HFP_AUDIO_CONNECT_TIMEOUT_MS)) {
+            ESP_LOGW(TAG, "HFP audio request timeout: reason=%s attempt=%" PRIu32 " retry now",
+                     reason, s_state.hfp_audio_req_attempts);
+            s_state.hfp_audio_connecting = false;
+            s_state.hfp_audio_connect_started = 0;
+            s_state.hfp_next_audio_req = 0;
+        } else {
+            return true;
+        }
+    }
+
     if (s_state.hfp_next_audio_req != 0 && now < s_state.hfp_next_audio_req) {
         return false;
     }
 
     s_state.hfp_audio_connecting = true;
+    s_state.hfp_audio_connect_started = now;
     s_state.hfp_audio_req_attempts++;
     esp_err_t ret = esp_hf_client_connect_audio(s_state.hfp_peer_bda);
     if (ret != ESP_OK) {
         s_state.hfp_audio_connecting = false;
+        s_state.hfp_audio_connect_started = 0;
         s_state.hfp_next_audio_req = now + pdMS_TO_TICKS(HFP_AUDIO_RETRY_MS);
         ESP_LOGW(TAG, "HFP audio request %s failed: %s attempt=%" PRIu32 " retry_ms=%u",
                  reason, esp_err_to_name(ret), s_state.hfp_audio_req_attempts, HFP_AUDIO_RETRY_MS);
@@ -414,6 +438,7 @@ static bool bt_input_hfp_audio_request_internal(const char *reason)
 static void bt_input_hfp_audio_schedule_retry(const char *reason)
 {
     s_state.hfp_audio_connecting = false;
+    s_state.hfp_audio_connect_started = 0;
     s_state.hfp_next_audio_req = xTaskGetTickCount() + pdMS_TO_TICKS(HFP_AUDIO_RETRY_MS);
     ESP_LOGI(TAG, "HFP audio retry scheduled: %s retry_ms=%u", reason, HFP_AUDIO_RETRY_MS);
 }
@@ -562,7 +587,7 @@ static uint32_t bt_input_hfp_outgoing_cb(uint8_t *buf, uint32_t len)
 
     if (!bt_input_hfp_fifo_read(buf, len)) {
         s_hfp_cb_underruns++;
-        bt_input_hfp_fill_last_sample(buf, len);
+        bt_input_hfp_fill_fade_silence(buf, len);
         s_hfp_cb_calls++;
         s_hfp_cb_bytes += len;
         bt_input_hfp_log_audio_stats(budget_empty ? "cb budget_fill" : "cb underrun");
@@ -674,6 +699,7 @@ static void bt_input_hfp_cb(esp_hf_client_cb_event_t event, esp_hf_client_cb_par
             s_state.hfp_sync_conn_handle = 0;
             s_state.hfp_last_pkt_stat_req = 0;
             s_state.hfp_next_audio_req = 0;
+            s_state.hfp_audio_connect_started = 0;
             s_state.hfp_audio_req_attempts = 0;
             bt_input_audio_close();
         }
@@ -688,6 +714,7 @@ static void bt_input_hfp_cb(esp_hf_client_cb_event_t event, esp_hf_client_cb_par
             param->audio_stat.state == ESP_HF_CLIENT_AUDIO_STATE_CONNECTED_MSBC) {
             s_state.hfp_audio_connected = true;
             s_state.hfp_audio_connecting = false;
+            s_state.hfp_audio_connect_started = 0;
             s_state.hfp_audio_msbc =
                 (param->audio_stat.state == ESP_HF_CLIENT_AUDIO_STATE_CONNECTED_MSBC);
             s_state.hfp_sync_conn_handle = param->audio_stat.sync_conn_handle;
@@ -709,6 +736,7 @@ static void bt_input_hfp_cb(esp_hf_client_cb_event_t event, esp_hf_client_cb_par
                 bt_input_hfp_audio_schedule_retry("disconnect while connecting");
             } else {
                 s_state.hfp_audio_connecting = false;
+                s_state.hfp_audio_connect_started = 0;
             }
         }
         ESP_LOGI(TAG, "HFP audio state: %d codec=%s rate=%" PRIu32 " sync=0x%04x",
@@ -1065,11 +1093,15 @@ void bt_input_hfp_mic_set_enabled(bool enabled)
         bt_input_hfp_vrec_stop("mic disabled");
         bt_input_hfp_audio_reset();
         s_state.hfp_audio_connecting = false;
+        s_state.hfp_audio_connect_started = 0;
         s_state.hfp_next_audio_req = 0;
     } else {
-        if (!bt_input_hfp_vrec_start("on mic enable")) {
-            bt_input_hfp_audio_request_internal("on mic enable");
-        }
+        bool vrec_requested = bt_input_hfp_vrec_start("on mic enable");
+        bool audio_requested = bt_input_hfp_audio_request_internal(
+            vrec_requested ? "on mic enable vrec fallback" : "on mic enable");
+        ESP_LOGI(TAG, "HFP mic enabled: vrec=%d audio_req=%d audio=%d codec=%s rate=%" PRIu32,
+                 vrec_requested, audio_requested, s_state.hfp_audio_connected, bt_input_hfp_codec_text(),
+                 bt_input_hfp_pcm_sample_rate());
     }
 }
 
@@ -1116,9 +1148,7 @@ void bt_input_hfp_feed_pcm(const int16_t *samples, size_t sample_count)
 {
     if (!s_state.hfp_audio_connected || !s_state.mic_enabled || !s_state.audio_open || samples == NULL ||
         sample_count == 0) {
-        if (!bt_input_hfp_peer_supports_vrec()) {
-            bt_input_hfp_audio_request_internal("feed");
-        }
+        bt_input_hfp_audio_request_internal("feed");
         s_hfp_feed_drops++;
         bt_input_hfp_log_audio_stats("feed disabled");
         return;
