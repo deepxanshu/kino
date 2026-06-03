@@ -10,12 +10,9 @@
 extern "C" {
 #endif
 
-#include "driver/i2c.h"
-#include "i2c_bus.h"
 #include "hal/i2c_types.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "../esp_now/esp_now_init.h"
 #include "../ui/ui_setup_screen.h"
 #include "../ui/ui_running_screen.h"
 #include "../ui/ui_imu_screen.h"
@@ -25,6 +22,7 @@ joystick_data_t joystick_init();
 void joystick_reinit(void);
 void joystick_deinit(void);
 bool joystick_is_ready(void);
+bool joystick_read_state(uint16_t *joyX, uint16_t *joyY, bool *pressed);
 void handle_setup_screen(void *pvParam);
 void handle_running_screen(void *pvParam);
 void handle_imu_screen(void *pvParam);

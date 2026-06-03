@@ -1,5 +1,7 @@
 set(SOURCES
-    esp_now/esp_now_init.c
+    bluetooth/bt_input.c
+    joystick/joyc_i2c_bridge.cpp
+    joystick/joyc_soft_i2c.c
     joystick/joystick_handle.c
     mic/mic_spectrum.c
     mic/mic_handle.cpp
@@ -16,8 +18,9 @@ set(SOURCES
 idf_component_register(SRCS ${SOURCES}
                     INCLUDE_DIRS 
                     "."
-                    esp_now
+                    bluetooth
                     joystick
                     mic
                     ui
+                    REQUIRES bt nvs_flash
                     )

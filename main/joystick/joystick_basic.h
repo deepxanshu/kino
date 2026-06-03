@@ -6,6 +6,9 @@
 #ifndef _JOYSTICK_BASIC_H_
 #define _JOYSTICK_BASIC_H_
 
+#include <stdbool.h>
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -16,6 +19,7 @@ typedef struct {
     int8_t bat;
     uint16_t joyX;
     uint16_t joyY;
+    bool joy_pressed;
     uint8_t screen_mode;
     uint8_t select_mode;
     bool btnB_status;

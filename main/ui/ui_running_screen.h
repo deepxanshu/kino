@@ -31,11 +31,11 @@ extern lv_obj_t* running_screen;
 extern lv_obj_t* joystick_dot;
 extern lv_obj_t* joystick_area;
 extern lv_obj_t* battery_label;
-extern lv_obj_t* channel_info_label;
-extern lv_obj_t* id_info_label;
+extern lv_obj_t* mouse_info_label;
+extern lv_obj_t* click_info_label;
 
 void create_running_screen();
-void update_running_screen(int16_t joyX, int16_t joyY, uint8_t channel, uint8_t id, uint8_t bat);
+void update_running_screen(int16_t joyX, int16_t joyY, uint8_t bat, bool pressed, bool bt_connected);
 void ui_running_screen_destory();
 
 #ifdef __cplusplus

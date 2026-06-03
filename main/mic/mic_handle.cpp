@@ -11,13 +11,14 @@
 #include "freertos/task.h"
 
 extern "C" {
+#include "../bluetooth/bt_input.h"
 #include "../joystick/joystick_basic.h"
 #include "../mic/mic_spectrum.h"
 #include "../ui/ui_mic_screen.h"
 }
 
-#define MIC_SAMPLE_RATE 16000
-#define MIC_SAMPLE_COUNT 256
+#define MIC_SAMPLE_RATE 8000
+#define MIC_SAMPLE_COUNT 160
 
 static const char *TAG = "mic_screen";
 
@@ -46,6 +47,8 @@ void mic_mode_enter(void)
 
     s_mic_muted  = false;
     s_mic_active = M5.Mic.begin();
+    bt_input_hfp_mic_set_enabled(s_mic_active);
+    bt_input_hfp_audio_reset();
     ESP_LOGI(TAG, "Mic %s", s_mic_active ? "started" : "failed to start");
 }
 
@@ -53,6 +56,7 @@ void mic_mode_exit(void)
 {
     s_mic_active = false;
     s_mic_muted  = true;
+    bt_input_hfp_mic_set_enabled(false);
 
     M5.Mic.end();
 
@@ -65,6 +69,7 @@ void mic_mode_exit(void)
 void mic_mode_toggle_muted(void)
 {
     s_mic_muted = !s_mic_muted;
+    bt_input_hfp_mic_set_enabled(!s_mic_muted && s_mic_active);
 }
 
 bool mic_mode_is_muted(void)
@@ -92,7 +97,8 @@ void handle_mic_screen(void *pvParam)
         }
 
         if (!s_mic_active || s_mic_muted) {
-            update_mic_screen(&empty_spectrum, joystick_data->bat, s_mic_active, s_mic_muted);
+            update_mic_screen(&empty_spectrum, joystick_data->bat, s_mic_active, s_mic_muted,
+                              bt_input_hfp_connected(), bt_input_hfp_audio_connected());
             vTaskDelay(pdMS_TO_TICKS(50));
             continue;
         }
@@ -112,10 +118,13 @@ void handle_mic_screen(void *pvParam)
         }
 
         if (recorded && s_mic_active && joystick_data->screen_mode == MODE_MIC) {
+            bt_input_hfp_feed_pcm(samples, MIC_SAMPLE_COUNT);
             mic_spectrum_compute(samples, MIC_SAMPLE_COUNT, MIC_SAMPLE_RATE, MIC_BAR_MAX_HEIGHT, &spectrum);
-            update_mic_screen(&spectrum, joystick_data->bat, true, false);
+            update_mic_screen(&spectrum, joystick_data->bat, true, false,
+                              bt_input_hfp_connected(), bt_input_hfp_audio_connected());
         } else {
-            update_mic_screen(&empty_spectrum, joystick_data->bat, false, false);
+            update_mic_screen(&empty_spectrum, joystick_data->bat, false, false,
+                              bt_input_hfp_connected(), bt_input_hfp_audio_connected());
         }
         s_mic_busy = false;
 

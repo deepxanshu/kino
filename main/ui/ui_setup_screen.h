@@ -30,11 +30,12 @@ extern "C" {
 #define Y_MAX     (3460)
 
 extern lv_obj_t *setup_screen;
-extern lv_obj_t *channel_label;
-extern lv_obj_t *id_label;
-extern lv_obj_t *start_btn;
-extern lv_obj_t *channel_dropdown;
-extern lv_obj_t *id_dropdown;
+extern lv_obj_t *setup_device_label;
+extern lv_obj_t *setup_mouse_label;
+extern lv_obj_t *setup_hfp_label;
+extern lv_obj_t *setup_audio_label;
+extern lv_obj_t *setup_mode_label;
+extern lv_obj_t *setup_hint_label;
 
 void create_setup_screen();
 void update_setup_screen(joystick_data_t *data);

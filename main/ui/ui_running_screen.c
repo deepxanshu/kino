@@ -12,8 +12,8 @@ lv_obj_t* running_screen     = NULL;
 lv_obj_t* joystick_dot       = NULL;
 lv_obj_t* joystick_area      = NULL;
 lv_obj_t* battery_label      = NULL;
-lv_obj_t* channel_info_label = NULL;
-lv_obj_t* id_info_label      = NULL;
+lv_obj_t* mouse_info_label   = NULL;
+lv_obj_t* click_info_label   = NULL;
 
 /**
  * @brief Create the running screen UI with joystick visualization and status information
@@ -22,8 +22,8 @@ lv_obj_t* id_info_label      = NULL;
  *       - Joystick visualization area with crosshair
  *       - Red dot representing joystick position
  *       - Battery level display
- *       - Channel information display
- *       - Device ID information display
+ *       - Bluetooth mouse status display
+ *       - Joystick click status display
  * @details The function creates a 115x115 pixel joystick area with crosshair lines
  *          and a red circular dot that represents the current joystick position
  * @warning This function should only be called once per application run to avoid memory leaks
@@ -98,17 +98,15 @@ void create_running_screen()
     lv_obj_align(battery_label, LV_ALIGN_TOP_LEFT, 10, 160);
     lv_obj_set_style_text_font(battery_label, &lv_font_montserrat_14, 0);
 
-    // Create Channel information display
-    channel_info_label = lv_label_create(running_screen);
-    lv_label_set_text(channel_info_label, "Channel: 1");
-    lv_obj_align(channel_info_label, LV_ALIGN_TOP_LEFT, 10, 180);
-    lv_obj_set_style_text_font(channel_info_label, &lv_font_montserrat_14, 0);
+    mouse_info_label = lv_label_create(running_screen);
+    lv_label_set_text(mouse_info_label, "Mouse: WAIT");
+    lv_obj_align(mouse_info_label, LV_ALIGN_TOP_LEFT, 10, 180);
+    lv_obj_set_style_text_font(mouse_info_label, &lv_font_montserrat_14, 0);
 
-    // Create ID information display
-    id_info_label = lv_label_create(running_screen);
-    lv_label_set_text(id_info_label, "Receiver ID: \n0(broadcast)");
-    lv_obj_align(id_info_label, LV_ALIGN_TOP_LEFT, 10, 200);
-    lv_obj_set_style_text_font(id_info_label, &lv_font_montserrat_14, 0);
+    click_info_label = lv_label_create(running_screen);
+    lv_label_set_text(click_info_label, "Click: UP");
+    lv_obj_align(click_info_label, LV_ALIGN_TOP_LEFT, 10, 200);
+    lv_obj_set_style_text_font(click_info_label, &lv_font_montserrat_14, 0);
 
     lvgl_port_unlock();
 }
@@ -117,8 +115,6 @@ void create_running_screen()
  * @brief Update the running screen UI with current joystick values and status information
  * @param joyX X-axis value from joystick (raw value to be mapped to screen coordinates)
  * @param joyY Y-axis value from joystick (raw value to be mapped to screen coordinates)
- * @param channel Current WiFi channel being used
- * @param id Device ID for communication
  * @param bat Battery level percentage (0-100)
  * @note This function maps joystick values to the 115x115 pixel joystick area
  *       and applies deadzone correction to center the dot when joystick is near center position
@@ -127,9 +123,9 @@ void create_running_screen()
  *      2. Applies deadzone correction to keep dot centered when joystick is in neutral position
  *      3. Clamps values to prevent the dot from going outside the joystick area
  *      4. Updates the position of the joystick dot
- *      5. Updates battery level, channel and ID information labels
+ *      5. Updates battery level and Bluetooth mouse state labels
  */
-void update_running_screen(int16_t joyX, int16_t joyY, uint8_t channel, uint8_t id, uint8_t bat)
+void update_running_screen(int16_t joyX, int16_t joyY, uint8_t bat, bool pressed, bool bt_connected)
 {
     // Map joystick values to 115x115 area (using your mapping approach)
     int16_t x_pos = map(joyX, X_MIN, X_MAX, 5, 110);  // Leave 5px margin
@@ -159,13 +155,8 @@ void update_running_screen(int16_t joyX, int16_t joyY, uint8_t channel, uint8_t 
     // Update battery level
     lv_label_set_text_fmt(battery_label, "Bat: %d%%", bat);
 
-    // Update Channel and ID display
-    lv_label_set_text_fmt(channel_info_label, "Channel: %u", channel);
-    if (id == 0) {
-        lv_label_set_text(id_info_label, "Receiver ID:\n  0(broadcast)");
-    } else {
-        lv_label_set_text_fmt(id_info_label, "Receiver ID: %u", id);
-    }
+    lv_label_set_text(mouse_info_label, bt_connected ? "Mouse: OK" : "Mouse: WAIT");
+    lv_label_set_text(click_info_label, pressed ? "Click: DOWN" : "Click: UP");
     lvgl_port_unlock();
 }
 
@@ -188,6 +179,6 @@ void ui_running_screen_destory()
     joystick_dot       = NULL;
     joystick_area      = NULL;
     battery_label      = NULL;
-    channel_info_label = NULL;
-    id_info_label      = NULL;
+    mouse_info_label   = NULL;
+    click_info_label   = NULL;
 }

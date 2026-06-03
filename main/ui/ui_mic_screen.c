@@ -21,6 +21,7 @@ lv_obj_t *mic_spectrum_area = NULL;
 lv_obj_t *mic_battery_label = NULL;
 lv_obj_t *mic_status_label  = NULL;
 lv_obj_t *mic_level_label   = NULL;
+lv_obj_t *mic_bt_label      = NULL;
 
 static lv_obj_t *s_mic_bars[MIC_BAR_COUNT];
 static uint8_t s_last_bars[MIC_BAR_COUNT];
@@ -100,10 +101,16 @@ void create_mic_screen(void)
     lv_obj_align(mic_level_label, LV_ALIGN_TOP_LEFT, 10, 200);
     lv_obj_set_style_text_font(mic_level_label, &lv_font_montserrat_14, 0);
 
+    mic_bt_label = lv_label_create(mic_screen);
+    lv_label_set_text(mic_bt_label, "HFP:WAIT A:OFF");
+    lv_obj_align(mic_bt_label, LV_ALIGN_TOP_LEFT, 10, 220);
+    lv_obj_set_style_text_font(mic_bt_label, &lv_font_montserrat_14, 0);
+
     lvgl_port_unlock();
 }
 
-void update_mic_screen(const mic_spectrum_data_t *spectrum, uint8_t bat, bool running, bool muted)
+void update_mic_screen(const mic_spectrum_data_t *spectrum, uint8_t bat, bool running, bool muted,
+                       bool hfp_connected, bool audio_connected)
 {
     if (spectrum == NULL) {
         return;
@@ -138,11 +145,15 @@ void update_mic_screen(const mic_spectrum_data_t *spectrum, uint8_t bat, bool ru
         if (muted) {
             lv_label_set_text(mic_status_label, "Mic: PAUSE");
         } else {
-            lv_label_set_text(mic_status_label, running ? "Mic: ON 16k" : "Mic: OFF");
+            lv_label_set_text(mic_status_label, running ? "Mic: ON 8k" : "Mic: OFF");
         }
     }
     if (mic_level_label != NULL) {
         lv_label_set_text_fmt(mic_level_label, "Level: %d dB", spectrum->db);
+    }
+    if (mic_bt_label != NULL) {
+        lv_label_set_text_fmt(mic_bt_label, "HFP:%s A:%s", hfp_connected ? "SLC" : "WAIT",
+                              audio_connected ? "ON" : "OFF");
     }
 
     lvgl_port_unlock();
@@ -165,6 +176,7 @@ void ui_mic_screen_destory(void)
     mic_battery_label = NULL;
     mic_status_label  = NULL;
     mic_level_label   = NULL;
+    mic_bt_label      = NULL;
     for (int i = 0; i < MIC_BAR_COUNT; i++) {
         s_mic_bars[i] = NULL;
         s_last_bars[i] = 0;

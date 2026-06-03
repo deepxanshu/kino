@@ -4,22 +4,97 @@
  * SPDX-License-Identifier: MIT
  */
 #include "joystick_handle.h"
+#include "../bluetooth/bt_input.h"
+#include "driver/gpio.h"
 #include "freertos/semphr.h"
+#include "joyc_i2c_bridge.h"
 
-i2c_bus_handle_t i2c0_bus_handle;
-i2c_bus_device_handle_t i2c_device1;  // i2c device handle
 static SemaphoreHandle_t s_joystick_i2c_lock;
-static bool s_joystick_scan_done;
+
+#define MOUSE_POLL_MS 12
+#define MOUSE_UI_REFRESH_MS 60
+#define MOUSE_DEAD_ZONE 150
+#define MOUSE_CENTER_TRACK_ZONE 260
+#define MOUSE_CENTER_TRACK_SHIFT 4
+#define MOUSE_MAX_DELTA 48
+#define JOY_SETUP_LOG_MS 1000
+#define JOY_MOUSE_LOG_MS 250
+#define JOY_READ_FAIL_LOG_MS 1000
+
+static const char *TAG = "joy_diag";
+
+static int16_t s_mouse_center_x = X_CENTER;
+static int16_t s_mouse_center_y = Y_CENTER;
+static TickType_t s_last_read_fail_log = 0;
+
+static void log_joy_pins(const char *stage)
+{
+    ESP_LOGI(TAG, "%s: gpio0=%d gpio26=%d", stage, gpio_get_level(GPIO_NUM_0), gpio_get_level(GPIO_NUM_26));
+}
+
+static int16_t abs16(int16_t value)
+{
+    return value < 0 ? -value : value;
+}
+
+static int8_t mouse_axis_delta(int16_t raw, int16_t center, int16_t min_value, int16_t max_value, bool invert)
+{
+    int16_t delta = raw - center;
+    int16_t abs_delta = abs16(delta);
+    if (abs_delta <= MOUSE_DEAD_ZONE) {
+        return 0;
+    }
+
+    int16_t span = delta > 0 ? (max_value - center) : (center - min_value);
+    if (span <= MOUSE_DEAD_ZONE) {
+        span = MOUSE_DEAD_ZONE + 1;
+    }
+
+    int32_t effective = abs_delta - MOUSE_DEAD_ZONE;
+    int32_t usable = span - MOUSE_DEAD_ZONE;
+    int32_t scaled = 1 + (effective * 8 / usable) + (effective * effective * 40 / (usable * usable));
+    if (scaled > MOUSE_MAX_DELTA) {
+        scaled = MOUSE_MAX_DELTA;
+    }
+
+    int8_t out = delta > 0 ? (int8_t)scaled : (int8_t)-scaled;
+    return invert ? -out : out;
+}
+
+static void mouse_center_reset(uint16_t joyX, uint16_t joyY)
+{
+    if (joyX >= X_MIN && joyX <= X_MAX) {
+        s_mouse_center_x = joyX;
+    } else {
+        s_mouse_center_x = X_CENTER;
+    }
+    if (joyY >= Y_MIN && joyY <= Y_MAX) {
+        s_mouse_center_y = joyY;
+    } else {
+        s_mouse_center_y = Y_CENTER;
+    }
+}
+
+static void mouse_center_track(uint16_t joyX, uint16_t joyY, bool pressed)
+{
+    if (pressed) {
+        return;
+    }
+
+    int16_t dx = (int16_t)joyX - s_mouse_center_x;
+    int16_t dy = (int16_t)joyY - s_mouse_center_y;
+    if (abs16(dx) <= MOUSE_CENTER_TRACK_ZONE && abs16(dy) <= MOUSE_CENTER_TRACK_ZONE) {
+        s_mouse_center_x += dx / (1 << MOUSE_CENTER_TRACK_SHIFT);
+        s_mouse_center_y += dy / (1 << MOUSE_CENTER_TRACK_SHIFT);
+    }
+}
 
 /**
  * @brief Initialize joystick via I2C interface
  * @note This is an internal static function that configures I2C_NUM_0 as master with SDA on GPIO0 and SCL on GPIO26
  * @details
- *      1. Configures I2C master mode with 100kHz clock speed
- *      2. Creates I2C bus handle using I2C_NUM_0
- *      3. Scans the I2C bus to detect connected devices and logs their addresses
- *      4. Creates device handle for joystick at I2C address 0x54
- *      5. Assigns the device handle to global variable [i2c_device1]
+ *      1. Configures M5.Ex_I2C on I2C_NUM_0 with SDA GPIO0 and SCL GPIO26
+ *      2. Probes the JoyC joystick at I2C address 0x54
  * @warning This function assumes the joystick device is at I2C address 0x54
  */
 static void joystick_i2c_init()
@@ -32,46 +107,25 @@ static void joystick_i2c_init()
         xSemaphoreTake(s_joystick_i2c_lock, portMAX_DELAY);
     }
 
-    if (i2c_device1 != NULL) {
+    if (joyc_i2c_is_ready()) {
         if (s_joystick_i2c_lock != NULL) {
             xSemaphoreGive(s_joystick_i2c_lock);
         }
         return;
     }
 
-    i2c_config_t conf;
-    {
-        conf.mode             = I2C_MODE_MASTER;
-        conf.sda_io_num       = 0;
-        conf.scl_io_num       = 26;
-        conf.sda_pullup_en    = GPIO_PULLUP_ENABLE;
-        conf.scl_pullup_en    = GPIO_PULLUP_ENABLE;
-        conf.master.clk_speed = 100000;
-        conf.clk_flags        = 0;
-    };
-    i2c0_bus_handle = i2c_bus_create(I2C_NUM_0, &conf);
-    if (i2c0_bus_handle == NULL) {
-        ESP_LOGE("I2C Joystick", "Failed to create I2C bus");
+    ESP_LOGI(TAG, "i2c init: begin via M5.Ex_I2C gpio0=%d gpio26=%d", gpio_get_level(GPIO_NUM_0),
+             gpio_get_level(GPIO_NUM_26));
+    if (!joyc_i2c_begin()) {
+        ESP_LOGE(TAG, "JoyC 0x54 probe failed via M5.Ex_I2C");
         if (s_joystick_i2c_lock != NULL) {
             xSemaphoreGive(s_joystick_i2c_lock);
         }
         return;
     }
 
-    if (!s_joystick_scan_done) {
-        uint8_t buf[128];
-        memset(buf, 0, sizeof(buf));
-
-        i2c_bus_scan(i2c0_bus_handle, buf, sizeof(buf));
-        for (size_t i = 0; i < sizeof(buf); i++) {
-            if (buf[i] != 0) {
-                ESP_LOGI("I2C Scanner", "Found device at address 0x%02X", buf[i]);
-            }
-        }
-        s_joystick_scan_done = true;
-    }
-
-    i2c_device1 = i2c_bus_device_create(i2c0_bus_handle, 0x54, 0);
+    ESP_LOGI(TAG, "JoyC ready via M5.Ex_I2C gpio0=%d gpio26=%d", gpio_get_level(GPIO_NUM_0),
+             gpio_get_level(GPIO_NUM_26));
 
     if (s_joystick_i2c_lock != NULL) {
         xSemaphoreGive(s_joystick_i2c_lock);
@@ -80,32 +134,31 @@ static void joystick_i2c_init()
 
 void joystick_reinit(void)
 {
+    log_joy_pins("joystick reinit begin");
     joystick_i2c_init();
+    log_joy_pins("joystick reinit end");
 }
 
 void joystick_deinit(void)
 {
+    log_joy_pins("joystick deinit begin");
     if (s_joystick_i2c_lock != NULL) {
         xSemaphoreTake(s_joystick_i2c_lock, portMAX_DELAY);
     }
 
-    if (i2c_device1 != NULL) {
-        i2c_bus_device_delete(&i2c_device1);
-        i2c_device1 = NULL;
-    }
-    if (i2c0_bus_handle != NULL) {
-        i2c_bus_delete(&i2c0_bus_handle);
-        i2c0_bus_handle = NULL;
+    if (joyc_i2c_is_ready()) {
+        joyc_i2c_release();
     }
 
     if (s_joystick_i2c_lock != NULL) {
         xSemaphoreGive(s_joystick_i2c_lock);
     }
+    log_joy_pins("joystick deinit end");
 }
 
 bool joystick_is_ready(void)
 {
-    return i2c_device1 != NULL;
+    return joyc_i2c_is_ready();
 }
 
 /**
@@ -121,38 +174,74 @@ bool joystick_is_ready(void)
  *      5. Stores the combined values in the provided pointers
  * @warning This function assumes the joystick provides 16-bit data in little-endian format
  */
-static void joystick_read_xy(uint16_t *joyX, uint16_t *joyY)
+bool joystick_read_state(uint16_t *joyX, uint16_t *joyY, bool *pressed)
 {
+    TickType_t now = xTaskGetTickCount();
     if (s_joystick_i2c_lock != NULL &&
         xSemaphoreTake(s_joystick_i2c_lock, pdMS_TO_TICKS(50)) != pdTRUE) {
         *joyX = X_CENTER;
         *joyY = Y_CENTER;
-        return;
+        if (pressed != NULL) {
+            *pressed = false;
+        }
+        if ((now - s_last_read_fail_log) >= pdMS_TO_TICKS(JOY_READ_FAIL_LOG_MS)) {
+            ESP_LOGW(TAG, "read fail: i2c mutex timeout ready=%d gpio0=%d gpio26=%d",
+                     joyc_i2c_is_ready(), gpio_get_level(GPIO_NUM_0), gpio_get_level(GPIO_NUM_26));
+            s_last_read_fail_log = now;
+        }
+        return false;
     }
 
-    if (i2c_device1 == NULL) {
+    if (!joyc_i2c_is_ready()) {
         *joyX = X_CENTER;
         *joyY = Y_CENTER;
+        if (pressed != NULL) {
+            *pressed = false;
+        }
         if (s_joystick_i2c_lock != NULL) {
             xSemaphoreGive(s_joystick_i2c_lock);
         }
-        return;
+        if ((now - s_last_read_fail_log) >= pdMS_TO_TICKS(JOY_READ_FAIL_LOG_MS)) {
+            ESP_LOGW(TAG, "read fail: JoyC not ready gpio0=%d gpio26=%d",
+                     gpio_get_level(GPIO_NUM_0), gpio_get_level(GPIO_NUM_26));
+            s_last_read_fail_log = now;
+        }
+        return false;
     }
 
     uint8_t data[4];
-    esp_err_t ret = i2c_bus_read_bytes(i2c_device1, 0x00, 2, data);
-    vTaskDelay(20 / portTICK_PERIOD_MS);
-    ret |= i2c_bus_read_bytes(i2c_device1, 0x02, 2, &data[2]);
-    if (ret == ESP_OK) {
+    bool xy_ok = joyc_i2c_read_bytes(0x00, data, 2);
+    vTaskDelay(pdMS_TO_TICKS(20));
+    xy_ok = xy_ok && joyc_i2c_read_bytes(0x02, &data[2], 2);
+    if (xy_ok) {
         *joyX = (data[1] << 8) | data[0];
         *joyY = (data[3] << 8) | data[2];
     } else {
         // ESP_LOGE("I2C Joystick", "Failed to read joystick data");
+        *joyX = X_CENTER;
+        *joyY = Y_CENTER;
+        if ((now - s_last_read_fail_log) >= pdMS_TO_TICKS(JOY_READ_FAIL_LOG_MS)) {
+            ESP_LOGW(TAG, "read fail: xy via M5.Ex_I2C ready=%d gpio0=%d gpio26=%d",
+                     joyc_i2c_is_ready(), gpio_get_level(GPIO_NUM_0), gpio_get_level(GPIO_NUM_26));
+            s_last_read_fail_log = now;
+        }
+    }
+
+    if (pressed != NULL) {
+        uint8_t btn = 0;
+        bool btn_ok = joyc_i2c_read_bytes(0x30, &btn, 1);
+        *pressed = btn_ok && (btn != 0);
+        if (!btn_ok && (now - s_last_read_fail_log) >= pdMS_TO_TICKS(JOY_READ_FAIL_LOG_MS)) {
+            ESP_LOGW(TAG, "read warn: button via M5.Ex_I2C xy_ok=%d gpio0=%d gpio26=%d",
+                     xy_ok, gpio_get_level(GPIO_NUM_0), gpio_get_level(GPIO_NUM_26));
+            s_last_read_fail_log = now;
+        }
     }
 
     if (s_joystick_i2c_lock != NULL) {
         xSemaphoreGive(s_joystick_i2c_lock);
     }
+    return xy_ok;
 }
 
 /**
@@ -179,6 +268,7 @@ joystick_data_t joystick_init()
     tmp.bat         = 0;
     tmp.joyX        = 0;
     tmp.joyY        = 0;
+    tmp.joy_pressed = false;
     tmp.accel_x     = 0.0f;
     tmp.accel_y     = 0.0f;
     tmp.accel_z     = 0.0f;
@@ -199,10 +289,22 @@ joystick_data_t joystick_init()
 void handle_setup_screen(void *pvParam)
 {
     joystick_data_t *joystick_data = (joystick_data_t *)pvParam;
+    TickType_t last_setup_log = 0;
+
     while (1) {
         if (joystick_data->screen_mode == MODE_SETUP) {
-            joystick_read_xy(&joystick_data->joyX, &joystick_data->joyY);
+            bool read_ok = joystick_read_state(&joystick_data->joyX, &joystick_data->joyY, &joystick_data->joy_pressed);
             update_setup_screen(joystick_data);
+            TickType_t now = xTaskGetTickCount();
+            if ((now - last_setup_log) >= pdMS_TO_TICKS(JOY_SETUP_LOG_MS)) {
+                ESP_LOGI(TAG,
+                         "setup raw: ok=%d ready=%d x=%u y=%u btn=%d hid=%s hfp=%s audio=%s discoverable=%d gpio0=%d gpio26=%d",
+                         read_ok, joystick_is_ready(), joystick_data->joyX, joystick_data->joyY,
+                         joystick_data->joy_pressed, bt_input_hid_status_text(), bt_input_hfp_status_text(),
+                         bt_input_audio_status_text(), bt_input_is_discoverable(), gpio_get_level(GPIO_NUM_0),
+                         gpio_get_level(GPIO_NUM_26));
+                last_setup_log = now;
+            }
             vTaskDelay(50 / portTICK_PERIOD_MS);
         } else {
             vTaskDelay(200 / portTICK_PERIOD_MS);
@@ -228,62 +330,64 @@ void handle_setup_screen(void *pvParam)
 void handle_running_screen(void *pvParam)
 {
     joystick_data_t *joystick_data = (joystick_data_t *)pvParam;
-    // communicate packet
-    uint8_t pkt[8];
-    pkt[0]              = joystick_data->id;  // id: 0 for broadcast
-    int16_t yaw_angle   = 0;
-    int16_t pitch_angle = 0;
-    int16_t last_yaw    = 0;
-    int16_t last_pitch  = 0;
-    int16_t speed_val   = 600;
+    bool last_pressed = false;
+    bool mouse_mode_active = false;
+    TickType_t last_ui_update = 0;
+    TickType_t last_mouse_log = 0;
 
     while (1) {
-        // update screen and send packet when in running mode
         if (joystick_data->screen_mode == MODE_RUNNING) {
-            joystick_read_xy(&joystick_data->joyX, &joystick_data->joyY);
+            bool read_ok = joystick_read_state(&joystick_data->joyX, &joystick_data->joyY, &joystick_data->joy_pressed);
 
-            if (running_screen != NULL && lv_obj_is_valid(running_screen)) {
-                update_running_screen(joystick_data->joyX, joystick_data->joyY, joystick_data->channel,
-                                      joystick_data->id, joystick_data->bat);
+            if (!mouse_mode_active) {
+                mouse_center_reset(joystick_data->joyX, joystick_data->joyY);
+                last_pressed = joystick_data->joy_pressed;
+                mouse_mode_active = true;
+                last_ui_update = 0;
+                last_mouse_log = 0;
+                ESP_LOGI(TAG, "mouse enter: read_ok=%d raw=(%u,%u) center=(%d,%d) btn=%d hid=%s",
+                         read_ok, joystick_data->joyX, joystick_data->joyY, s_mouse_center_x, s_mouse_center_y,
+                         joystick_data->joy_pressed, bt_input_hid_status_text());
             }
 
-            // handle data from joystick
-            if ((joystick_data->joyX < X_CENTER + DEAD_ZONE) && (joystick_data->joyX > X_CENTER - DEAD_ZONE)) {
-                joystick_data->joyX = X_CENTER;
-            }
-            if ((joystick_data->joyY < Y_CENTER + DEAD_ZONE) && (joystick_data->joyY > Y_CENTER - DEAD_ZONE)) {
-                joystick_data->joyY = Y_CENTER;
-            }
-
-            yaw_angle   = (int16_t)map(joystick_data->joyX, X_MIN, X_MAX, 1280, -1280);
-            pitch_angle = (int16_t)map(joystick_data->joyY, Y_MIN, Y_MAX, 0, 900);
-
-            // send pitch_angle and yaw_angle only when changes exceed threshold
-            if (abs(yaw_angle - last_yaw) < 5 && abs(pitch_angle - last_pitch) < 5) {
-                if (pkt[7] != joystick_data->btnB_status) {
-                    pkt[7] = joystick_data->btnB_status;
-                    espnow_send_data(pkt, sizeof(pkt));
-                }
-                vTaskDelay(30 / portTICK_PERIOD_MS);
-                continue;
+            TickType_t now = xTaskGetTickCount();
+            if ((now - last_ui_update) >= pdMS_TO_TICKS(MOUSE_UI_REFRESH_MS) &&
+                running_screen != NULL && lv_obj_is_valid(running_screen)) {
+                update_running_screen(joystick_data->joyX, joystick_data->joyY, joystick_data->bat,
+                                      joystick_data->joy_pressed, bt_input_hid_connected());
+                last_ui_update = now;
             }
 
-            pkt[0] = joystick_data->id;
-            memcpy(&pkt[1], &yaw_angle, sizeof(int16_t));
-            memcpy(&pkt[3], &pitch_angle, sizeof(int16_t));
-            memcpy(&pkt[5], &speed_val, sizeof(int16_t));
-            pkt[7] = joystick_data->btnB_status;
+            int16_t joy_x = joystick_data->joyX;
+            int16_t joy_y = joystick_data->joyY;
+            int16_t center_before_x = s_mouse_center_x;
+            int16_t center_before_y = s_mouse_center_y;
+            mouse_center_track(joy_x, joy_y, joystick_data->joy_pressed);
+            int8_t dx = mouse_axis_delta(joy_x, s_mouse_center_x, X_MIN, X_MAX, false);
+            int8_t dy = mouse_axis_delta(joy_y, s_mouse_center_y, Y_MIN, Y_MAX, true);
 
-#if 0 
-            ESP_LOGI("handle_running_screen", "Yaw: %d, Pitch: %d, Speed: %d, id: %u, Button: %u", 
-                        yaw_angle, pitch_angle, speed_val, joystick_data->id, joystick_data->btnB_status);
-#endif
-
-            last_yaw   = yaw_angle;
-            last_pitch = pitch_angle;
-            espnow_send_data(pkt, sizeof(pkt));
-            vTaskDelay(30 / portTICK_PERIOD_MS);
+            uint8_t buttons = joystick_data->joy_pressed ? 0x01 : 0x00;
+            bool pressed_changed = joystick_data->joy_pressed != last_pressed;
+            bool should_send = dx != 0 || dy != 0 || pressed_changed;
+            if ((now - last_mouse_log) >= pdMS_TO_TICKS(JOY_MOUSE_LOG_MS)) {
+                ESP_LOGI(TAG,
+                         "mouse raw: ok=%d x=%u y=%u btn=%d center=(%d,%d)->(%d,%d) raw_delta=(%d,%d) report=(%d,%d,%u) send=%d hid=%d",
+                         read_ok, joystick_data->joyX, joystick_data->joyY, joystick_data->joy_pressed,
+                         center_before_x, center_before_y, s_mouse_center_x, s_mouse_center_y,
+                         (int16_t)(joy_x - s_mouse_center_x), (int16_t)(joy_y - s_mouse_center_y),
+                         dx, dy, buttons, should_send, bt_input_hid_connected());
+                last_mouse_log = now;
+            }
+            if (pressed_changed) {
+                ESP_LOGI(TAG, "mouse button: raw_btn=%d hid=%d", joystick_data->joy_pressed, bt_input_hid_connected());
+            }
+            if (should_send) {
+                bt_input_mouse_send(buttons, dx, dy, 0);
+                last_pressed = joystick_data->joy_pressed;
+            }
+            vTaskDelay(pdMS_TO_TICKS(MOUSE_POLL_MS));
         } else {
+            mouse_mode_active = false;
             vTaskDelay(200 / portTICK_PERIOD_MS);
         }
     }
@@ -315,50 +419,10 @@ void handle_imu_screen(void *pvParam)
 {
     joystick_data_t *joystick_data = (joystick_data_t *)pvParam;
 
-    static IMU_Angle_t last_imu_angle = {0.0f, 0.0f};
-
-    // communicate packet
-    uint8_t pkt[8];
-    pkt[0]              = joystick_data->id;  // id: 0 for broadcast
-    int16_t yaw_angle   = 0;
-    int16_t pitch_angle = 0;
-    int16_t last_yaw    = 0;
-    int16_t last_pitch  = 0;
-    int16_t speed_val   = 600;
-
     while (1) {
-        // update screen and send packet when in running mode
         if (joystick_data->screen_mode == MODE_IMU) {
-            IMU_Angle_t imu_angle =
-                update_imu_screen(joystick_data->accel_x, joystick_data->accel_y, joystick_data->accel_z,
-                                  joystick_data->bat, joystick_data->id, joystick_data->channel);
-
-            // Limit the roll value to the range of -1.5 to 1.5
-            float limited_roll = fmaxf(-1.5f, fminf(1.5f, imu_angle.roll));
-            // Limit the pitch value to the range of 0 to 1.5
-            float limited_pitch = fmaxf(0.0f, fminf(1.5f, imu_angle.pitch));
-
-            yaw_angle   = (int16_t)map(limited_roll, -1.5, 1.5, -1280, 1280);
-            pitch_angle = (int16_t)map(limited_pitch, 0, 1.5, 900, 0);
-
-            if (abs(yaw_angle - last_yaw) < 10 && abs(last_pitch - pitch_angle) < 10) {
-                vTaskDelay(30 / portTICK_PERIOD_MS);
-                continue;
-            }
-            last_yaw   = yaw_angle;
-            last_pitch = pitch_angle;
-
-            pkt[0] = joystick_data->id;
-            memcpy(&pkt[1], &yaw_angle, sizeof(int16_t));
-            memcpy(&pkt[3], &pitch_angle, sizeof(int16_t));
-            memcpy(&pkt[5], &speed_val, sizeof(int16_t));
-            pkt[7] = joystick_data->btnB_status;
-            espnow_send_data(pkt, sizeof(pkt));
-
-#if 0 
-            // ESP_LOGI("handle_imu_screen", "yaw_angle: %.2f, pitch_angle:%.2f, yaw: %d, pitch: %d\n", 
-                                            imu_angle.roll, imu_angle.pitch, yaw_angle, pitch_angle);
-#endif
+            update_imu_screen(joystick_data->accel_x, joystick_data->accel_y, joystick_data->accel_z,
+                              joystick_data->bat, joystick_data->id, joystick_data->channel);
 
             vTaskDelay(30 / portTICK_PERIOD_MS);
         } else {

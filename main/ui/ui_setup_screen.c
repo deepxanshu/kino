@@ -4,20 +4,34 @@
  * SPDX-License-Identifier: MIT
  */
 #include "ui_setup_screen.h"
+#include "../bluetooth/bt_input.h"
 #include "../lvgl_port.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
 LV_IMG_DECLARE(updown_img);
 
-lv_obj_t *setup_screen     = NULL;
-lv_obj_t *channel_label    = NULL;
-lv_obj_t *id_label         = NULL;
-lv_obj_t *channel_dropdown = NULL;
-lv_obj_t *id_dropdown      = NULL;
+lv_obj_t *setup_screen       = NULL;
+lv_obj_t *setup_device_label = NULL;
+lv_obj_t *setup_mouse_label  = NULL;
+lv_obj_t *setup_hfp_label    = NULL;
+lv_obj_t *setup_audio_label  = NULL;
+lv_obj_t *setup_mode_label   = NULL;
+lv_obj_t *setup_hint_label   = NULL;
+
+static lv_obj_t *create_status_label(lv_obj_t *parent, int y, const char *text)
+{
+    lv_obj_t *label = lv_label_create(parent);
+    lv_label_set_text(label, text);
+    lv_label_set_long_mode(label, LV_LABEL_LONG_CLIP);
+    lv_obj_set_width(label, 125);
+    lv_obj_align(label, LV_ALIGN_TOP_LEFT, 8, y);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
+    return label;
+}
 
 /**
- * @brief Create the setup screen UI with configuration options
+ * @brief Create the setup screen UI with Bluetooth connection state.
  * @note This function creates a standalone screen with multiple UI elements:
  *       - Title label at the top
  *       - Channel selection dropdown with options 1-14
@@ -46,53 +60,17 @@ void create_setup_screen()
 
     lv_obj_clear_flag(setup_screen, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Create title
     lv_obj_t *label = lv_label_create(setup_screen);
     lv_label_set_text(label, "StackChan :)");
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 10);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
 
-    // Create Channel selection label
-    channel_label = lv_label_create(setup_screen);
-    lv_label_set_text(channel_label, "Channel:");
-    lv_obj_align(channel_label, LV_ALIGN_TOP_LEFT, 5, 30);
-
-    // Create Channel dropdown
-    channel_dropdown = lv_dropdown_create(setup_screen);
-    lv_dropdown_set_options(channel_dropdown, "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14");
-    lv_dropdown_set_selected(channel_dropdown, 0);
-    lv_obj_align(channel_dropdown, LV_ALIGN_TOP_LEFT, 5, 50);
-    lv_dropdown_set_symbol(channel_dropdown, &updown_img);
-    // Set dropdown background color
-    lv_obj_set_style_bg_color(channel_dropdown, lv_color_make(255, 255, 255), LV_PART_MAIN);  // White
-    lv_obj_set_style_bg_opa(channel_dropdown, LV_OPA_COVER, LV_PART_MAIN);  // Ensure background is opaque
-
-    // Create ID selection label
-    id_label = lv_label_create(setup_screen);
-    lv_label_set_text(id_label, "Receiver ID:");
-    lv_obj_align(id_label, LV_ALIGN_TOP_LEFT, 5, 100);
-
-    // Create ID dropdown
-    id_dropdown = lv_dropdown_create(setup_screen);
-    lv_dropdown_set_options(
-        id_dropdown,
-        "0(Broadcast)"
-        "\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n3"
-        "0\n31\n32\n33\n34\n35\n36\n37\n38\n39\n40\n41\n42\n43\n44\n45\n46\n47\n48\n49\n50");
-    lv_dropdown_set_selected(id_dropdown, 0);
-    lv_obj_align(id_dropdown, LV_ALIGN_TOP_LEFT, 5, 120);
-    lv_dropdown_set_symbol(id_dropdown, &updown_img);
-    // Set dropdown background color
-    lv_obj_set_style_bg_color(id_dropdown, lv_color_make(255, 255, 255), LV_PART_MAIN);  // White
-    lv_obj_set_style_bg_opa(id_dropdown, LV_OPA_COVER, LV_PART_MAIN);                    // Ensure background is opaque
-
-    lv_obj_t *btn_label = lv_label_create(setup_screen);
-    lv_label_set_text(btn_label, "Press to Start");
-    lv_obj_set_style_text_font(btn_label, &lv_font_montserrat_18, 0);
-    lv_obj_align(btn_label, LV_ALIGN_BOTTOM_MID, 0, -30);
-
-    lv_obj_t *arrow_label = lv_label_create(setup_screen);
-    lv_label_set_text(arrow_label, LV_SYMBOL_DOWN);
-    lv_obj_align(arrow_label, LV_ALIGN_BOTTOM_MID, 0, -5);
+    setup_device_label = create_status_label(setup_screen, 40, "StickC JoyMic");
+    setup_mouse_label  = create_status_label(setup_screen, 68, "Mouse: INIT");
+    setup_hfp_label    = create_status_label(setup_screen, 96, "HFP: INIT");
+    setup_audio_label  = create_status_label(setup_screen, 124, "Audio: OFF");
+    setup_mode_label   = create_status_label(setup_screen, 152, "Bat: 100%");
+    setup_hint_label   = create_status_label(setup_screen, 194, "A:Mode B:Pair");
 
     lvgl_port_unlock();
 }
@@ -115,47 +93,23 @@ void update_setup_screen(joystick_data_t *data)
     while (!lvgl_port_lock()) {
         vTaskDelay(pdMS_TO_TICKS(10));
     }
-    // Update setup screen
-    if (data->select_mode == CHANNEL_SELECT) {
-        lv_obj_set_style_bg_color(channel_dropdown, lv_color_make(255, 255, 0), LV_PART_MAIN);  // Yellow
-        lv_obj_set_style_bg_color(id_dropdown, lv_color_make(255, 255, 255), LV_PART_MAIN);     // White
-    } else if (data->select_mode == ID_SELECT) {
-        lv_obj_set_style_bg_color(channel_dropdown, lv_color_make(255, 255, 255), LV_PART_MAIN);  // White
-        lv_obj_set_style_bg_color(id_dropdown, lv_color_make(255, 255, 0), LV_PART_MAIN);         // Yellow
+    if (setup_device_label != NULL) {
+        lv_label_set_text_fmt(setup_device_label, "Name: %s", BT_INPUT_DEVICE_NAME);
     }
-    // In setup mode, joystick up/down controls value increment/decrement
-    if (data->joyY > Y_CENTER + DEAD_ZONE) {
-        // Move up - Increase Channel
-        if (data->select_mode == CHANNEL_SELECT) {
-            uint16_t selected = lv_dropdown_get_selected(channel_dropdown);
-            if (selected < 13) {  // Maximum index is 13 (corresponding to Channel 14)
-                lv_dropdown_set_selected(channel_dropdown, selected + 1);
-                data->channel = selected + 2;  // Index + 1 + 1 = displayed value
-            }
-        } else if (data->select_mode == ID_SELECT) {
-            uint16_t selected = lv_dropdown_get_selected(id_dropdown);
-            if (selected < 50) {
-                lv_dropdown_set_selected(id_dropdown, selected + 1);
-                data->id = selected + 1;
-            }
-        }
-        vTaskDelay(50 / portTICK_PERIOD_MS);  // Add delay to prevent rapid changes
-    } else if (data->joyY < Y_CENTER - DEAD_ZONE) {
-        // Move down - Decrease Channel
-        if (data->select_mode == CHANNEL_SELECT) {
-            uint16_t selected = lv_dropdown_get_selected(channel_dropdown);
-            if (selected > 0) {
-                lv_dropdown_set_selected(channel_dropdown, selected - 1);
-                data->channel = selected;  // Index - 1 + 1 = index itself
-            }
-        } else if (data->select_mode == ID_SELECT) {
-            uint16_t selected = lv_dropdown_get_selected(id_dropdown);
-            if (selected > 0) {
-                lv_dropdown_set_selected(id_dropdown, selected - 1);
-                data->id = selected - 1;
-            }
-        }
-        vTaskDelay(50 / portTICK_PERIOD_MS);  // Add delay to prevent rapid changes
+    if (setup_mouse_label != NULL) {
+        lv_label_set_text_fmt(setup_mouse_label, "Mouse: %s", bt_input_hid_status_text());
+    }
+    if (setup_hfp_label != NULL) {
+        lv_label_set_text_fmt(setup_hfp_label, "HFP: %s", bt_input_hfp_status_text());
+    }
+    if (setup_audio_label != NULL) {
+        lv_label_set_text_fmt(setup_audio_label, "Audio: %s", bt_input_audio_status_text());
+    }
+    if (setup_mode_label != NULL) {
+        lv_label_set_text_fmt(setup_mode_label, "Bat: %d%%", data->bat);
+    }
+    if (setup_hint_label != NULL) {
+        lv_label_set_text(setup_hint_label, bt_input_is_discoverable() ? "Pairing..." : "A:Mode B:Pair");
     }
     lvgl_port_unlock();
 }
@@ -178,8 +132,10 @@ void ui_setup_screen_destory()
     }
     lvgl_port_unlock();
 
-    channel_label    = NULL;
-    id_label         = NULL;
-    channel_dropdown = NULL;
-    id_dropdown      = NULL;
+    setup_device_label = NULL;
+    setup_mouse_label  = NULL;
+    setup_hfp_label    = NULL;
+    setup_audio_label  = NULL;
+    setup_mode_label   = NULL;
+    setup_hint_label   = NULL;
 }
