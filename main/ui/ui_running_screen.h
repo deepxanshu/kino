@@ -10,17 +10,13 @@
 extern "C" {
 #endif
 
-#include "lvgl.h"
+#include <stdbool.h>
+#include <stdint.h>
 #include "../joystick/joystick_basic.h"
 
-extern lv_obj_t* running_screen;
-extern lv_obj_t* joystick_dot;
-extern lv_obj_t* joystick_area;
-extern lv_obj_t* battery_label;
-extern lv_obj_t* mouse_info_label;
-extern lv_obj_t* click_info_label;
-
 void create_running_screen(void);
+bool ui_running_screen_is_ready(void);
+bool ui_running_screen_load(bool animated);
 void update_running_screen(int16_t joyX, int16_t joyY, uint8_t bat, bool pressed, bool bt_connected);
 void ui_running_screen_destory(void);
 

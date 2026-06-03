@@ -8,14 +8,15 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
+#include "lvgl.h"
 #include <math.h>
 
-lv_obj_t* running_screen     = NULL;
-lv_obj_t* joystick_dot       = NULL;
-lv_obj_t* joystick_area      = NULL;
-lv_obj_t* battery_label      = NULL;
-lv_obj_t* mouse_info_label   = NULL;
-lv_obj_t* click_info_label   = NULL;
+static lv_obj_t* running_screen     = NULL;
+static lv_obj_t* joystick_dot       = NULL;
+static lv_obj_t* joystick_area      = NULL;
+static lv_obj_t* battery_label      = NULL;
+static lv_obj_t* mouse_info_label   = NULL;
+static lv_obj_t* click_info_label   = NULL;
 
 static int16_t map_range(int16_t value, int16_t in_min, int16_t in_max, int16_t out_min, int16_t out_max)
 {
@@ -53,6 +54,7 @@ void create_running_screen(void)
 
     if (running_screen == NULL) {
         ESP_LOGE("UI", "Failed to create running screen!");
+        lvgl_port_unlock();
         return;
     }
 
@@ -118,6 +120,34 @@ void create_running_screen(void)
     lvgl_port_unlock();
 }
 
+bool ui_running_screen_is_ready(void)
+{
+    while (!lvgl_port_lock()) {
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    bool ready = running_screen != NULL && lv_obj_is_valid(running_screen);
+    lvgl_port_unlock();
+    return ready;
+}
+
+bool ui_running_screen_load(bool animated)
+{
+    while (!lvgl_port_lock()) {
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    if (running_screen == NULL || !lv_obj_is_valid(running_screen)) {
+        lvgl_port_unlock();
+        return false;
+    }
+    if (animated) {
+        lv_scr_load_anim(running_screen, LV_SCR_LOAD_ANIM_MOVE_LEFT, 200, 0, false);
+    } else {
+        lv_disp_load_scr(running_screen);
+    }
+    lvgl_port_unlock();
+    return true;
+}
+
 /**
  * @brief Update the running screen UI with current joystick values and status information
  * @param joyX X-axis value from joystick (raw value to be mapped to screen coordinates)
@@ -155,6 +185,11 @@ void update_running_screen(int16_t joyX, int16_t joyY, uint8_t bat, bool pressed
 
     while (!lvgl_port_lock()) {
         vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    if (running_screen == NULL || !lv_obj_is_valid(running_screen) ||
+        joystick_dot == NULL || battery_label == NULL || mouse_info_label == NULL || click_info_label == NULL) {
+        lvgl_port_unlock();
+        return;
     }
     // Update joystick dot position (relative to joystick_area center)
     lv_obj_align(joystick_dot, LV_ALIGN_TOP_LEFT, x_pos - 5, y_pos - 5);

@@ -8,6 +8,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
+#include "lvgl.h"
 #include "../lvgl_port.h"
 
 #define MIC_BAR_COUNT MIC_SPECTRUM_BANDS
@@ -16,12 +17,12 @@
 #define MIC_BAR_GAP 2
 #define MIC_BAR_BASE_Y 108
 
-lv_obj_t *mic_screen        = NULL;
-lv_obj_t *mic_spectrum_area = NULL;
-lv_obj_t *mic_battery_label = NULL;
-lv_obj_t *mic_status_label  = NULL;
-lv_obj_t *mic_level_label   = NULL;
-lv_obj_t *mic_bt_label      = NULL;
+static lv_obj_t *mic_screen        = NULL;
+static lv_obj_t *mic_spectrum_area = NULL;
+static lv_obj_t *mic_battery_label = NULL;
+static lv_obj_t *mic_status_label  = NULL;
+static lv_obj_t *mic_level_label   = NULL;
+static lv_obj_t *mic_bt_label      = NULL;
 
 static lv_obj_t *s_mic_bars[MIC_BAR_COUNT];
 static uint8_t s_last_bars[MIC_BAR_COUNT];
@@ -53,6 +54,11 @@ void create_mic_screen(void)
 
     if (mic_screen == NULL) {
         mic_screen = lv_obj_create(NULL);
+    }
+    if (mic_screen == NULL) {
+        ESP_LOGE("UI", "Failed to create mic screen!");
+        lvgl_port_unlock();
+        return;
     }
 
     lv_obj_clear_flag(mic_screen, LV_OBJ_FLAG_SCROLLABLE);
@@ -109,6 +115,34 @@ void create_mic_screen(void)
     lvgl_port_unlock();
 }
 
+bool ui_mic_screen_is_ready(void)
+{
+    while (!lvgl_port_lock()) {
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    bool ready = mic_screen != NULL && lv_obj_is_valid(mic_screen);
+    lvgl_port_unlock();
+    return ready;
+}
+
+bool ui_mic_screen_load(bool animated)
+{
+    while (!lvgl_port_lock()) {
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    if (mic_screen == NULL || !lv_obj_is_valid(mic_screen)) {
+        lvgl_port_unlock();
+        return false;
+    }
+    if (animated) {
+        lv_scr_load_anim(mic_screen, LV_SCR_LOAD_ANIM_MOVE_LEFT, 200, 0, false);
+    } else {
+        lv_disp_load_scr(mic_screen);
+    }
+    lvgl_port_unlock();
+    return true;
+}
+
 void update_mic_screen(const mic_spectrum_data_t *spectrum, uint8_t bat, bool running, bool muted,
                        bool hfp_connected, bool audio_connected)
 {
@@ -118,6 +152,10 @@ void update_mic_screen(const mic_spectrum_data_t *spectrum, uint8_t bat, bool ru
 
     while (!lvgl_port_lock()) {
         vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    if (mic_screen == NULL || !lv_obj_is_valid(mic_screen)) {
+        lvgl_port_unlock();
+        return;
     }
 
     for (int i = 0; i < MIC_BAR_COUNT; i++) {

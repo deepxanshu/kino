@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "bt_hid_mouse.h"
 #include "esp_bt.h"
 #include "esp_bt_device.h"
 #include "esp_bt_main.h"
@@ -22,7 +23,6 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 
-#define HID_MOUSE_REPORT_SIZE 4
 #define HFP_AUDIO_RINGBUF_SIZE 4096
 #define HFP_AUDIO_BYTES_PER_SECOND 16000
 #define HFP_AUDIO_TX_TIMER_US 1000
@@ -31,36 +31,6 @@
 #define HID_DROP_LOG_MS 1000
 
 static const char *TAG = "bt_input";
-
-static uint8_t s_hid_mouse_descriptor[] = {
-    0x05, 0x01,  // USAGE_PAGE (Generic Desktop)
-    0x09, 0x02,  // USAGE (Mouse)
-    0xa1, 0x01,  // COLLECTION (Application)
-    0x09, 0x01,  //   USAGE (Pointer)
-    0xa1, 0x00,  //   COLLECTION (Physical)
-    0x05, 0x09,  //     USAGE_PAGE (Button)
-    0x19, 0x01,  //     USAGE_MINIMUM (Button 1)
-    0x29, 0x03,  //     USAGE_MAXIMUM (Button 3)
-    0x15, 0x00,  //     LOGICAL_MINIMUM (0)
-    0x25, 0x01,  //     LOGICAL_MAXIMUM (1)
-    0x95, 0x03,  //     REPORT_COUNT (3)
-    0x75, 0x01,  //     REPORT_SIZE (1)
-    0x81, 0x02,  //     INPUT (Data,Var,Abs)
-    0x95, 0x01,  //     REPORT_COUNT (1)
-    0x75, 0x05,  //     REPORT_SIZE (5)
-    0x81, 0x03,  //     INPUT (Cnst,Var,Abs)
-    0x05, 0x01,  //     USAGE_PAGE (Generic Desktop)
-    0x09, 0x30,  //     USAGE (X)
-    0x09, 0x31,  //     USAGE (Y)
-    0x09, 0x38,  //     USAGE (Wheel)
-    0x15, 0x81,  //     LOGICAL_MINIMUM (-127)
-    0x25, 0x7f,  //     LOGICAL_MAXIMUM (127)
-    0x75, 0x08,  //     REPORT_SIZE (8)
-    0x95, 0x03,  //     REPORT_COUNT (3)
-    0x81, 0x06,  //     INPUT (Data,Var,Rel)
-    0xc0,        //   END_COLLECTION
-    0xc0,        // END_COLLECTION
-};
 
 typedef struct {
     bool bt_ready;
@@ -76,7 +46,7 @@ typedef struct {
     bool mic_enabled;
     uint8_t protocol_mode;
     esp_bd_addr_t hfp_peer_bda;
-    uint8_t mouse_report[HID_MOUSE_REPORT_SIZE];
+    uint8_t mouse_report[BT_HID_MOUSE_REPORT_SIZE];
     SemaphoreHandle_t lock;
     bool audio_open;
 } bt_input_state_t;
@@ -85,17 +55,6 @@ static bt_input_state_t s_state = {
     .discoverable  = true,
     .protocol_mode = ESP_HIDD_REPORT_MODE,
 };
-
-static esp_hidd_app_param_t s_hid_app = {
-    .name          = BT_INPUT_DEVICE_NAME,
-    .description   = "StickC JoyMic Mouse",
-    .provider      = "M5Stack",
-    .subclass      = ESP_HID_CLASS_MIC,
-    .desc_list     = s_hid_mouse_descriptor,
-    .desc_list_len = sizeof(s_hid_mouse_descriptor),
-};
-
-static esp_hidd_qos_param_t s_hid_qos = {0};
 
 static uint32_t s_hfp_feed_calls;
 static uint32_t s_hfp_feed_bytes;
@@ -598,7 +557,8 @@ static void bt_input_hidd_cb(esp_hidd_cb_event_t event, esp_hidd_cb_param_t *par
     switch (event) {
     case ESP_HIDD_INIT_EVT:
         if (param->init.status == ESP_HIDD_SUCCESS) {
-            esp_bt_hid_device_register_app(&s_hid_app, &s_hid_qos, &s_hid_qos);
+            esp_hidd_qos_param_t *qos = bt_hid_mouse_qos_param();
+            esp_bt_hid_device_register_app(bt_hid_mouse_app_param(), qos, qos);
         } else {
             ESP_LOGE(TAG, "HID init failed: %d", param->init.status);
         }
@@ -649,7 +609,7 @@ static void bt_input_hidd_cb(esp_hidd_cb_event_t event, esp_hidd_cb_param_t *par
                  param->get_report.report_type, s_state.protocol_mode);
         if (bt_input_check_report(param->get_report.report_id, param->get_report.report_type)) {
             uint8_t report_id = 0;
-            uint16_t report_len = HID_MOUSE_REPORT_SIZE;
+            uint16_t report_len = BT_HID_MOUSE_REPORT_SIZE;
             if (s_state.protocol_mode == ESP_HIDD_BOOT_MODE) {
                 report_id = ESP_HIDD_BOOT_REPORT_ID_MOUSE;
                 report_len = ESP_HIDD_BOOT_REPORT_SIZE_MOUSE - 1;
@@ -883,7 +843,7 @@ void bt_input_mouse_send(uint8_t buttons, int8_t dx, int8_t dy, int8_t wheel)
     s_state.mouse_report[3] = (uint8_t)wheel;
 
     uint8_t report_id = 0;
-    uint16_t report_len = HID_MOUSE_REPORT_SIZE;
+    uint16_t report_len = BT_HID_MOUSE_REPORT_SIZE;
     if (s_state.protocol_mode == ESP_HIDD_BOOT_MODE) {
         report_id = ESP_HIDD_BOOT_REPORT_ID_MOUSE;
         report_len = ESP_HIDD_BOOT_REPORT_SIZE_MOUSE - 1;

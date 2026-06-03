@@ -1,6 +1,10 @@
 set(SOURCES
+    app_state.c
+    device_mode.c
+    bluetooth/bt_hid_mouse.c
     bluetooth/bt_input.c
     joystick/joyc_i2c_bridge.cpp
+    joystick/mouse_controller.c
     joystick/joyc_soft_i2c.c
     joystick/joystick_handle.c
     mic/mic_spectrum.c

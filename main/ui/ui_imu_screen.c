@@ -5,6 +5,7 @@
  */
 #include "ui_imu_screen.h"
 #include "esp_log.h"
+#include "lvgl.h"
 #include <math.h>
 #include "../lvgl_port.h"
 #include "freertos/FreeRTOS.h"
@@ -17,11 +18,11 @@ static lv_obj_t *cross_lines[2];  // 标识用的对角线
 static lv_point_t edge_points[12][2];  // 12条边，每条2个点
 static lv_point_t cross_points[2][2];  // 2条对角线，每条2个点
 
-lv_obj_t *imu_screen                  = NULL;
+static lv_obj_t *imu_screen           = NULL;
 static lv_obj_t *cube_container       = NULL;
-lv_obj_t *imu_battery_label           = NULL;
-lv_obj_t *imu_pitch_label             = NULL;
-lv_obj_t *imu_roll_label              = NULL;
+static lv_obj_t *imu_battery_label    = NULL;
+static lv_obj_t *imu_pitch_label      = NULL;
+static lv_obj_t *imu_roll_label       = NULL;
 
 // 3D cube parameters
 typedef struct {
@@ -65,6 +66,11 @@ void create_imu_screen(void)
     }
     if (imu_screen == NULL) {
         imu_screen = lv_obj_create(NULL);
+    }
+    if (imu_screen == NULL) {
+        ESP_LOGE("UI", "Failed to create IMU screen!");
+        lvgl_port_unlock();
+        return;
     }
     lv_obj_clear_flag(imu_screen, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -124,6 +130,34 @@ void create_imu_screen(void)
     lv_obj_set_style_text_font(imu_roll_label, &lv_font_montserrat_14, 0);
 
     lvgl_port_unlock();
+}
+
+bool ui_imu_screen_is_ready(void)
+{
+    while (!lvgl_port_lock()) {
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    bool ready = imu_screen != NULL && lv_obj_is_valid(imu_screen);
+    lvgl_port_unlock();
+    return ready;
+}
+
+bool ui_imu_screen_load(bool animated)
+{
+    while (!lvgl_port_lock()) {
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    if (imu_screen == NULL || !lv_obj_is_valid(imu_screen)) {
+        lvgl_port_unlock();
+        return false;
+    }
+    if (animated) {
+        lv_scr_load_anim(imu_screen, LV_SCR_LOAD_ANIM_MOVE_LEFT, 200, 0, false);
+    } else {
+        lv_disp_load_scr(imu_screen);
+    }
+    lvgl_port_unlock();
+    return true;
 }
 
 /**

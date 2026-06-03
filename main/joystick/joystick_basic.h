@@ -39,8 +39,6 @@ typedef struct {
 
 } joystick_data_t;
 
-extern joystick_data_t joystick_data;
-
 #ifdef __cplusplus
 }
 #endif

@@ -9,16 +9,17 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "lvgl.h"
 
 LV_IMG_DECLARE(updown_img);
 
-lv_obj_t *setup_screen       = NULL;
-lv_obj_t *setup_device_label = NULL;
-lv_obj_t *setup_mouse_label  = NULL;
-lv_obj_t *setup_hfp_label    = NULL;
-lv_obj_t *setup_audio_label  = NULL;
-lv_obj_t *setup_mode_label   = NULL;
-lv_obj_t *setup_hint_label   = NULL;
+static lv_obj_t *setup_screen       = NULL;
+static lv_obj_t *setup_device_label = NULL;
+static lv_obj_t *setup_mouse_label  = NULL;
+static lv_obj_t *setup_hfp_label    = NULL;
+static lv_obj_t *setup_audio_label  = NULL;
+static lv_obj_t *setup_mode_label   = NULL;
+static lv_obj_t *setup_hint_label   = NULL;
 
 static lv_obj_t *create_status_label(lv_obj_t *parent, int y, const char *text)
 {
@@ -57,6 +58,11 @@ void create_setup_screen(void)
     if (setup_screen == NULL) {
         setup_screen = lv_obj_create(NULL);
     }
+    if (setup_screen == NULL) {
+        ESP_LOGE("UI", "Failed to create setup screen!");
+        lvgl_port_unlock();
+        return;
+    }
 
     lv_obj_clear_flag(setup_screen, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -75,14 +81,50 @@ void create_setup_screen(void)
     lvgl_port_unlock();
 }
 
+bool ui_setup_screen_is_ready(void)
+{
+    while (!lvgl_port_lock()) {
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    bool ready = setup_screen != NULL && lv_obj_is_valid(setup_screen);
+    lvgl_port_unlock();
+    return ready;
+}
+
+bool ui_setup_screen_load(bool animated)
+{
+    while (!lvgl_port_lock()) {
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    if (setup_screen == NULL || !lv_obj_is_valid(setup_screen)) {
+        lvgl_port_unlock();
+        return false;
+    }
+    if (animated) {
+        lv_scr_load_anim(setup_screen, LV_SCR_LOAD_ANIM_MOVE_LEFT, 200, 0, false);
+    } else {
+        lv_disp_load_scr(setup_screen);
+    }
+    lvgl_port_unlock();
+    return true;
+}
+
 /**
  * @brief Update Bluetooth and battery status on the setup screen.
  * @param data Pointer to joystick data for the current battery level.
  */
-void update_setup_screen(joystick_data_t *data)
+void update_setup_screen(const joystick_data_t *data)
 {
+    if (data == NULL) {
+        return;
+    }
+
     while (!lvgl_port_lock()) {
         vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    if (setup_screen == NULL || !lv_obj_is_valid(setup_screen)) {
+        lvgl_port_unlock();
+        return;
     }
     if (setup_device_label != NULL) {
         lv_label_set_text_fmt(setup_device_label, "Name: %s", BT_INPUT_DEVICE_NAME);

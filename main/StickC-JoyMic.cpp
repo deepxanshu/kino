@@ -13,7 +13,9 @@ extern "C" {
 #include "nvs_flash.h"
 #include "esp_system.h"
 
+#include "app_state.h"
 #include "bt_input.h"
+#include "device_mode.h"
 #include "ui.h"
 #include "joystick_handle.h"
 #include "mic_handle.h"
@@ -22,45 +24,11 @@ extern "C" {
 
 using namespace m5;
 
-joystick_data_t joystick_data;
 static const char *TAG = "app_diag";
 
 static void log_porta_levels(const char *stage)
 {
     ESP_LOGI(TAG, "%s: gpio0=%d gpio26=%d", stage, gpio_get_level(GPIO_NUM_0), gpio_get_level(GPIO_NUM_26));
-}
-
-static void reset_shared_port_a_pins(TickType_t settle_ticks)
-{
-    ESP_LOGI(TAG, "reset PortA pins GPIO0/GPIO26 settle=%lu ms",
-             (unsigned long)(settle_ticks * portTICK_PERIOD_MS));
-    gpio_reset_pin(GPIO_NUM_0);
-    gpio_reset_pin(GPIO_NUM_26);
-    vTaskDelay(settle_ticks);
-    log_porta_levels("reset PortA pins done");
-}
-
-static const char *mode_name(uint8_t mode)
-{
-    switch (mode) {
-    case MODE_SETUP:
-        return "Setup";
-    case MODE_RUNNING:
-        return "Mouse";
-    case MODE_IMU:
-        return "IMU";
-    case MODE_MIC:
-        return "Mic";
-    case MODE_SWITCHING:
-        return "Switching";
-    default:
-        return "Unknown";
-    }
-}
-
-static bool mode_needs_joystick(uint8_t mode)
-{
-    return mode == MODE_SETUP || mode == MODE_RUNNING;
 }
 
 /**
@@ -70,75 +38,6 @@ static bool mode_needs_joystick(uint8_t mode)
  * 3. Click BtnB to mute/unmute mic on mic mode.
  * 4. Hold BtnB 3s to reopen pairing; hold BtnB 8s to clear bonds and reboot.
  */
-static void enter_screen_mode(uint8_t next_mode)
-{
-    uint8_t current_mode = joystick_data.screen_mode;
-    ESP_LOGI(TAG, "mode request: %s(%u) -> %s(%u) joy_ready=%d hid=%s hfp=%s audio=%s",
-             mode_name(current_mode), current_mode, mode_name(next_mode), next_mode, joystick_is_ready(),
-             bt_input_hid_status_text(), bt_input_hfp_status_text(), bt_input_audio_status_text());
-
-    if (current_mode == next_mode) {
-        return;
-    }
-
-    joystick_data.screen_mode = MODE_SWITCHING;
-    vTaskDelay(pdMS_TO_TICKS(20));
-
-    if (current_mode == MODE_MIC && next_mode != MODE_MIC) {
-        ESP_LOGI(TAG, "mode action: exit mic before entering %s", mode_name(next_mode));
-        mic_mode_exit();
-        reset_shared_port_a_pins(pdMS_TO_TICKS(120));
-
-        switch_screen(next_mode);
-        joystick_data.screen_mode = next_mode;
-        ESP_LOGI(TAG, "mode commit: %s(%u)", mode_name(joystick_data.screen_mode), joystick_data.screen_mode);
-        if (mode_needs_joystick(next_mode)) {
-            joystick_reinit();
-            ESP_LOGI(TAG, "mode action: joystick reinit done ready=%d", joystick_is_ready());
-        }
-        return;
-    }
-
-    if (next_mode == MODE_MIC && current_mode != MODE_MIC) {
-        ESP_LOGI(TAG, "mode action: deinit joystick before mic ready=%d", joystick_is_ready());
-        joystick_deinit();
-        ESP_LOGI(TAG, "mode action: joystick deinit done ready=%d", joystick_is_ready());
-        reset_shared_port_a_pins(pdMS_TO_TICKS(80));
-        mic_mode_enter();
-        switch_screen(MODE_MIC);
-        joystick_data.screen_mode = MODE_MIC;
-        ESP_LOGI(TAG, "mode commit: %s(%u)", mode_name(joystick_data.screen_mode), joystick_data.screen_mode);
-        return;
-    }
-
-    switch_screen(next_mode);
-    joystick_data.screen_mode = next_mode;
-    ESP_LOGI(TAG, "mode commit: %s(%u)", mode_name(joystick_data.screen_mode), joystick_data.screen_mode);
-    if (mode_needs_joystick(next_mode) && !joystick_is_ready()) {
-        ESP_LOGI(TAG, "mode action: target needs joystick, reinit ready=%d", joystick_is_ready());
-        joystick_reinit();
-        ESP_LOGI(TAG, "mode action: joystick reinit done ready=%d", joystick_is_ready());
-    }
-}
-
-static uint8_t next_screen_mode(uint8_t current_mode)
-{
-    switch (current_mode) {
-    case MODE_SETUP:
-        return MODE_RUNNING;
-    case MODE_RUNNING:
-        return MODE_MIC;
-    case MODE_MIC:
-        return MODE_IMU;
-    case MODE_IMU:
-        return MODE_SETUP;
-    case MODE_SWITCHING:
-        return MODE_SETUP;
-    default:
-        return MODE_SETUP;
-    }
-}
-
 static void handle_button_press(void)
 {
     static bool wait_release = false;
@@ -171,7 +70,7 @@ static void handle_button_press(void)
         if (!M5.BtnA.isPressed() && !M5.BtnB.isPressed()) {
             wait_release = false;
             cooldown_until = now + pdMS_TO_TICKS(300);
-            ESP_LOGI(TAG, "button release: cooldown 300ms mode=%s", mode_name(joystick_data.screen_mode));
+            ESP_LOGI(TAG, "button release: cooldown 300ms mode=%s", device_mode_name(app_state_get_mode()));
         }
         return;
     }
@@ -180,21 +79,23 @@ static void handle_button_press(void)
     }
 
     if (M5.BtnA.wasClicked()) {
-        uint8_t screen_mode = next_screen_mode(joystick_data.screen_mode);
+        uint8_t current_mode = app_state_get_mode();
+        uint8_t screen_mode = device_mode_next(current_mode);
         ESP_LOGI(TAG, "BtnA click: mode=%s target=%s A_pressed=%d B_pressed=%d gpio37=%d gpio39=%d",
-                 mode_name(joystick_data.screen_mode), mode_name(screen_mode), M5.BtnA.isPressed(),
+                 device_mode_name(current_mode), device_mode_name(screen_mode), M5.BtnA.isPressed(),
                  M5.BtnB.isPressed(), gpio_get_level(GPIO_NUM_37), gpio_get_level(GPIO_NUM_39));
-        enter_screen_mode(screen_mode);
+        device_mode_enter(screen_mode);
         wait_release = true;
         return;
     }
     if (M5.BtnB.wasClicked()) {
+        uint8_t current_mode = app_state_get_mode();
         ESP_LOGI(TAG, "BtnB click: mode=%s A_pressed=%d B_pressed=%d gpio37=%d gpio39=%d",
-                 mode_name(joystick_data.screen_mode), M5.BtnA.isPressed(), M5.BtnB.isPressed(),
+                 device_mode_name(current_mode), M5.BtnA.isPressed(), M5.BtnB.isPressed(),
                  gpio_get_level(GPIO_NUM_37), gpio_get_level(GPIO_NUM_39));
-        if (joystick_data.screen_mode == MODE_SETUP) {
+        if (current_mode == MODE_SETUP) {
             bt_input_set_discoverable(true);
-        } else if (joystick_data.screen_mode == MODE_MIC) {
+        } else if (current_mode == MODE_MIC) {
             mic_mode_toggle_muted();
         }
         wait_release = true;
@@ -230,7 +131,8 @@ void app_main(void)
              M5.Display.height());
 
     log_porta_levels("before joystick_init");
-    joystick_data = joystick_init();  // init joystick
+    joystick_data_t initial_state = joystick_init();  // init joystick
+    app_state_init(&initial_state);
     log_porta_levels("after joystick_init");
 
     lvgl_port_init();  // init LVGL
@@ -240,25 +142,20 @@ void app_main(void)
     bt_input_init();
     log_porta_levels("after bt_input_init");
 
-    xTaskCreate(handle_setup_screen, "handle_setup_screen", 8192, &joystick_data, 5, NULL);      // handle setup mode
-    xTaskCreate(handle_running_screen, "handle_running_screen", 8192, &joystick_data, 5, NULL);  // handle running mode
-    xTaskCreate(handle_imu_screen, "handle_imu_screen", 8192, &joystick_data, 5, NULL);
-    xTaskCreate(handle_mic_screen, "handle_mic_screen", 8192, &joystick_data, 5, NULL);
+    xTaskCreate(handle_setup_screen, "handle_setup_screen", 8192, NULL, 5, NULL);      // handle setup mode
+    xTaskCreate(handle_running_screen, "handle_running_screen", 8192, NULL, 5, NULL);  // handle running mode
+    xTaskCreate(handle_imu_screen, "handle_imu_screen", 8192, NULL, 5, NULL);
+    xTaskCreate(handle_mic_screen, "handle_mic_screen", 8192, NULL, 5, NULL);
 
     while (1) {
         M5.update();
         // Handle button press
         handle_button_press();
-        joystick_data.bat = (M5.Power.Axp192.getBatteryLevel());  // updata battery level
-
-        joystick_data.bat = (joystick_data.bat > 100) ? 100 : joystick_data.bat;
-        joystick_data.bat = (joystick_data.bat < 0) ? 0 : joystick_data.bat;
+        app_state_set_battery(M5.Power.Axp192.getBatteryLevel());  // update battery level
 
         M5.Imu.update();                              // update IMU data
         imu_data              = M5.Imu.getImuData();  // get IMU data
-        joystick_data.accel_x = imu_data.accel.x;
-        joystick_data.accel_y = imu_data.accel.y;
-        joystick_data.accel_z = imu_data.accel.z;
+        app_state_set_imu(imu_data.accel.x, imu_data.accel.y, imu_data.accel.z);
 
         vTaskDelay(pdMS_TO_TICKS(20));
     }

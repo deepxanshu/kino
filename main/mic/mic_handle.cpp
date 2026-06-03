@@ -11,8 +11,8 @@
 #include "freertos/task.h"
 
 extern "C" {
+#include "../app_state.h"
 #include "../bluetooth/bt_input.h"
-#include "../joystick/joystick_basic.h"
 #include "../mic/mic_spectrum.h"
 #include "../ui/ui_mic_screen.h"
 }
@@ -79,7 +79,7 @@ void mic_mode_toggle_muted(void)
 
 void handle_mic_screen(void *pvParam)
 {
-    joystick_data_t *joystick_data = (joystick_data_t *)pvParam;
+    (void)pvParam;
     static int16_t samples[MIC_SAMPLE_COUNT];
     static mic_spectrum_data_t spectrum;
     static mic_spectrum_data_t empty_spectrum;
@@ -87,13 +87,14 @@ void handle_mic_screen(void *pvParam)
     empty_spectrum.db = -90;
 
     while (1) {
-        if (joystick_data->screen_mode != MODE_MIC) {
+        if (app_state_get_mode() != MODE_MIC) {
             vTaskDelay(pdMS_TO_TICKS(200));
             continue;
         }
 
+        joystick_data_t snapshot = app_state_snapshot();
         if (!s_mic_active || s_mic_muted) {
-            update_mic_screen(&empty_spectrum, joystick_data->bat, s_mic_active, s_mic_muted,
+            update_mic_screen(&empty_spectrum, snapshot.bat, s_mic_active, s_mic_muted,
                               bt_input_hfp_connected(), bt_input_hfp_audio_connected());
             vTaskDelay(pdMS_TO_TICKS(50));
             continue;
@@ -102,29 +103,31 @@ void handle_mic_screen(void *pvParam)
         s_mic_busy = true;
         bool recorded = M5.Mic.record(samples, MIC_SAMPLE_COUNT, MIC_SAMPLE_RATE, false);
         if (recorded) {
-            while (M5.Mic.isRecording() && s_mic_active && joystick_data->screen_mode == MODE_MIC) {
+            while (M5.Mic.isRecording() && s_mic_active && app_state_get_mode() == MODE_MIC) {
                 vTaskDelay(pdMS_TO_TICKS(1));
             }
         }
 
-        if (!s_mic_active || joystick_data->screen_mode != MODE_MIC) {
+        if (!s_mic_active || app_state_get_mode() != MODE_MIC) {
             s_mic_busy = false;
             vTaskDelay(pdMS_TO_TICKS(20));
             continue;
         }
 
-        if (recorded && s_mic_active && joystick_data->screen_mode == MODE_MIC) {
+        if (recorded && s_mic_active && app_state_get_mode() == MODE_MIC) {
             bt_input_hfp_feed_pcm(samples, MIC_SAMPLE_COUNT);
 
             TickType_t now = xTaskGetTickCount();
             if ((now - last_ui_update) >= pdMS_TO_TICKS(MIC_UI_UPDATE_MS)) {
+                snapshot = app_state_snapshot();
                 mic_spectrum_compute(samples, MIC_SAMPLE_COUNT, MIC_SAMPLE_RATE, MIC_BAR_MAX_HEIGHT, &spectrum);
-                update_mic_screen(&spectrum, joystick_data->bat, true, false,
+                update_mic_screen(&spectrum, snapshot.bat, true, false,
                                   bt_input_hfp_connected(), bt_input_hfp_audio_connected());
                 last_ui_update = now;
             }
         } else {
-            update_mic_screen(&empty_spectrum, joystick_data->bat, false, false,
+            snapshot = app_state_snapshot();
+            update_mic_screen(&empty_spectrum, snapshot.bat, false, false,
                               bt_input_hfp_connected(), bt_input_hfp_audio_connected());
             vTaskDelay(pdMS_TO_TICKS(10));
         }

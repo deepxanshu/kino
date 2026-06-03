@@ -4,12 +4,35 @@
  * SPDX-License-Identifier: MIT
  */
 #include "ui.h"
+#include <stdbool.h>
 #include "esp_log.h"
-#include "lvgl.h"
 #include "ui_setup_screen.h"
 #include "ui_running_screen.h"
 #include "ui_imu_screen.h"
 #include "ui_mic_screen.h"
+
+typedef void (*ui_screen_action_t)(void);
+typedef bool (*ui_screen_check_t)(void);
+typedef bool (*ui_screen_load_t)(bool animated);
+
+static bool load_screen(const char *name, ui_screen_action_t create, ui_screen_check_t is_ready,
+                        ui_screen_load_t load, ui_screen_action_t destroy)
+{
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        if (!is_ready()) {
+            create();
+            ESP_LOGI("UI", "%s screen created", name);
+        }
+        if (load(true)) {
+            ESP_LOGI("UI", "%s screen loaded", name);
+            return true;
+        }
+
+        ESP_LOGE("UI", "%s screen is NULL or invalid!", name);
+        destroy();
+    }
+    return false;
+}
 
 /**
  * @brief Switches between different UI screens based on the provided screen ID
@@ -40,64 +63,17 @@
 void switch_screen(int screen_id)
 {
     if (screen_id == MODE_SETUP) {
-    setup_create:
-        if (setup_screen == NULL) {
-            create_setup_screen();
-            ESP_LOGI("UI", "Setup screen created");
-        }
-        // Load only if object is valid
-        if (setup_screen != NULL && lv_obj_is_valid(setup_screen)) {
-            ESP_LOGI("UI", "Setup screen loaded");
-            lv_scr_load_anim(setup_screen, LV_SCR_LOAD_ANIM_MOVE_LEFT, 200, 0, false);
-        } else {
-            ESP_LOGE("UI", "Setup screen is NULL or invalid!");
-            ui_setup_screen_destory();
-            goto setup_create;
-        }
+        load_screen("Setup", create_setup_screen, ui_setup_screen_is_ready,
+                    ui_setup_screen_load, ui_setup_screen_destory);
     } else if (screen_id == MODE_RUNNING) {
-    running_create:
-        if (running_screen == NULL) {
-            create_running_screen();
-            ESP_LOGI("UI", "Running screen created");
-        }
-        // Load only if object is valid
-        if (running_screen != NULL && lv_obj_is_valid(running_screen)) {
-            ESP_LOGI("UI", "Running screen loaded");
-            lv_scr_load_anim(running_screen, LV_SCR_LOAD_ANIM_MOVE_LEFT, 200, 0, false);
-        } else {
-            ESP_LOGE("UI", "Running screen is NULL or invalid!");
-            ui_running_screen_destory();
-            goto running_create;
-        }
+        load_screen("Running", create_running_screen, ui_running_screen_is_ready,
+                    ui_running_screen_load, ui_running_screen_destory);
     } else if (screen_id == MODE_IMU) {
-    imu_create:
-        if (imu_screen == NULL) {
-            create_imu_screen();
-            ESP_LOGI("UI", "IMU screen created");
-        }
-        // Load only if object is valid
-        if (imu_screen != NULL && lv_obj_is_valid(imu_screen)) {
-            ESP_LOGI("UI", "IMU screen loaded");
-            lv_scr_load_anim(imu_screen, LV_SCR_LOAD_ANIM_MOVE_LEFT, 200, 0, false);
-        } else {
-            ESP_LOGE("UI", "Running screen is NULL or invalid!");
-            ui_imu_screen_destory();
-            goto imu_create;
-        }
+        load_screen("IMU", create_imu_screen, ui_imu_screen_is_ready,
+                    ui_imu_screen_load, ui_imu_screen_destory);
     } else if (screen_id == MODE_MIC) {
-    mic_create:
-        if (mic_screen == NULL) {
-            create_mic_screen();
-            ESP_LOGI("UI", "Mic screen created");
-        }
-        if (mic_screen != NULL && lv_obj_is_valid(mic_screen)) {
-            ESP_LOGI("UI", "Mic screen loaded");
-            lv_scr_load_anim(mic_screen, LV_SCR_LOAD_ANIM_MOVE_LEFT, 200, 0, false);
-        } else {
-            ESP_LOGE("UI", "Mic screen is NULL or invalid!");
-            ui_mic_screen_destory();
-            goto mic_create;
-        }
+        load_screen("Mic", create_mic_screen, ui_mic_screen_is_ready,
+                    ui_mic_screen_load, ui_mic_screen_destory);
     } else {
         ESP_LOGE("UI", "Invalid screen mode!");
     }
@@ -115,5 +91,7 @@ void switch_screen(int screen_id)
 void ui_init(void)
 {
     create_setup_screen();
-    lv_disp_load_scr(setup_screen);
+    if (!ui_setup_screen_load(false)) {
+        ESP_LOGE("UI", "Initial setup screen load failed");
+    }
 }
