@@ -23,13 +23,14 @@
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 
-#define HFP_AUDIO_RINGBUF_SIZE 4096
+#define HFP_AUDIO_RINGBUF_SIZE 8192
 #define HFP_AUDIO_CVSD_SAMPLE_RATE 8000
 #define HFP_AUDIO_MSBC_SAMPLE_RATE 16000
 #define HFP_AUDIO_CVSD_PACKET_LEN 120
 #define HFP_AUDIO_MSBC_PCM_PACKET_LEN 240
 #define HFP_AUDIO_TX_TIMER_US 1000
-#define HFP_AUDIO_PREBUFFER_BYTES 960
+#define HFP_AUDIO_PREBUFFER_BYTES 2560
+#define HFP_AUDIO_HIGH_WATERMARK_BYTES 5120
 #define HFP_AUDIO_RETRY_MS 1500
 #define HFP_AUDIO_CONNECT_TIMEOUT_MS 3000
 #define HFP_PACKET_STATS_LOG_MS 2000
@@ -279,30 +280,33 @@ static size_t bt_input_hfp_fifo_write(const uint8_t *data, size_t len)
     return dropped;
 }
 
-static bool bt_input_hfp_fifo_read(uint8_t *data, size_t len)
+static size_t bt_input_hfp_fifo_read(uint8_t *data, size_t len)
 {
     if (data == NULL || len == 0) {
-        return false;
+        return 0;
     }
 
-    bool ok = false;
+    size_t read_len = 0;
     portENTER_CRITICAL(&s_hfp_audio_mux);
-    if (s_hfp_audio_used >= len) {
+    if (s_hfp_audio_used > 0) {
+        read_len = s_hfp_audio_used < len ? s_hfp_audio_used : len;
+        read_len &= ~(sizeof(int16_t) - 1U);
         size_t first = HFP_AUDIO_RINGBUF_SIZE - s_hfp_audio_tail;
-        if (first > len) {
-            first = len;
+        if (first > read_len) {
+            first = read_len;
         }
-        memcpy(data, &s_hfp_audio_fifo[s_hfp_audio_tail], first);
-        if (len > first) {
-            memcpy(data + first, s_hfp_audio_fifo, len - first);
+        if (read_len > 0) {
+            memcpy(data, &s_hfp_audio_fifo[s_hfp_audio_tail], first);
+            if (read_len > first) {
+                memcpy(data + first, s_hfp_audio_fifo, read_len - first);
+            }
+            s_hfp_audio_tail = (s_hfp_audio_tail + read_len) % HFP_AUDIO_RINGBUF_SIZE;
+            s_hfp_audio_used -= read_len;
         }
-        s_hfp_audio_tail = (s_hfp_audio_tail + len) % HFP_AUDIO_RINGBUF_SIZE;
-        s_hfp_audio_used -= len;
-        ok = true;
     }
     portEXIT_CRITICAL(&s_hfp_audio_mux);
 
-    return ok;
+    return read_len;
 }
 
 static void bt_input_hfp_fill_fade_silence(uint8_t *buf, uint32_t len)
@@ -585,12 +589,17 @@ static uint32_t bt_input_hfp_outgoing_cb(uint8_t *buf, uint32_t len)
         s_hfp_tx_budget_packets--;
     }
 
-    if (!bt_input_hfp_fifo_read(buf, len)) {
+    size_t read_len = bt_input_hfp_fifo_read(buf, len);
+    if (read_len < len) {
         s_hfp_cb_underruns++;
-        bt_input_hfp_fill_fade_silence(buf, len);
+        if (read_len > 0) {
+            bt_input_hfp_remember_last_sample(buf, read_len);
+        }
+        bt_input_hfp_fill_fade_silence(buf + read_len, len - read_len);
         s_hfp_cb_calls++;
         s_hfp_cb_bytes += len;
-        bt_input_hfp_log_audio_stats(budget_empty ? "cb budget_fill" : "cb underrun");
+        bt_input_hfp_log_audio_stats(read_len > 0 ? "cb partial" :
+                                     (budget_empty ? "cb budget_fill" : "cb underrun"));
         return len;
     }
 
@@ -1155,6 +1164,13 @@ void bt_input_hfp_feed_pcm(const int16_t *samples, size_t sample_count)
     }
 
     const size_t bytes = sample_count * sizeof(samples[0]);
+    size_t used_before = bt_input_hfp_fifo_used();
+    if ((used_before + bytes) > HFP_AUDIO_HIGH_WATERMARK_BYTES) {
+        s_hfp_feed_drops++;
+        bt_input_hfp_log_audio_stats("feed high_water");
+        return;
+    }
+
     size_t dropped = bt_input_hfp_fifo_write((const uint8_t *)samples, bytes);
     if (dropped > 0) {
         s_hfp_feed_drops++;
