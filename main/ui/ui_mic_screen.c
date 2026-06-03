@@ -58,7 +58,7 @@ void create_mic_screen(void)
     lv_obj_clear_flag(mic_screen, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t *label = lv_label_create(mic_screen);
-    lv_label_set_text(label, "StackChan :)");
+    lv_label_set_text(label, "JoyMic");
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 10);
     lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
 

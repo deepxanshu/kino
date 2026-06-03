@@ -77,16 +77,6 @@ void mic_mode_toggle_muted(void)
     bt_input_hfp_mic_set_enabled(!s_mic_muted && s_mic_active);
 }
 
-bool mic_mode_is_muted(void)
-{
-    return s_mic_muted;
-}
-
-bool mic_mode_is_active(void)
-{
-    return s_mic_active;
-}
-
 void handle_mic_screen(void *pvParam)
 {
     joystick_data_t *joystick_data = (joystick_data_t *)pvParam;

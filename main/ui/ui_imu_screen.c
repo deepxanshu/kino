@@ -4,23 +4,24 @@
  * SPDX-License-Identifier: MIT
  */
 #include "ui_imu_screen.h"
+#include "esp_log.h"
 #include <math.h>
-#include <stdio.h>
 #include "../lvgl_port.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+static const char *TAG = "ui_imu";
 static lv_obj_t *edge_lines[12];
 static lv_obj_t *cross_lines[2];  // 标识用的对角线
 
 static lv_point_t edge_points[12][2];  // 12条边，每条2个点
 static lv_point_t cross_points[2][2];  // 2条对角线，每条2个点
 
-lv_obj_t *imu_screen        = NULL;
-lv_obj_t *cube_container    = NULL;
-lv_obj_t *imu_battery_label = NULL;
-lv_obj_t *imu_pitch_label   = NULL;
-lv_obj_t *imu_roll_label    = NULL;
+lv_obj_t *imu_screen                  = NULL;
+static lv_obj_t *cube_container       = NULL;
+lv_obj_t *imu_battery_label           = NULL;
+lv_obj_t *imu_pitch_label             = NULL;
+lv_obj_t *imu_roll_label              = NULL;
 
 // 3D cube parameters
 typedef struct {
@@ -32,23 +33,23 @@ typedef struct {
 } Point2D;
 
 // Define the 8 vertices of a cube
-static Point3D vertices[8] = {{-1, -1, -1}, {1, -1, -1}, {1, 1, -1}, {-1, 1, -1},
-                              {-1, -1, 1},  {1, -1, 1},  {1, 1, 1},  {-1, 1, 1}};
+static const Point3D vertices[8] = {{-1, -1, -1}, {1, -1, -1}, {1, 1, -1}, {-1, 1, -1},
+                                    {-1, -1, 1},  {1, -1, 1},  {1, 1, 1},  {-1, 1, 1}};
 
 // Define the 12 edges of a cube (indices of vertices connected)
-static int edges[12][2] = {
+static const int edges[12][2] = {
     {0, 1}, {1, 2}, {2, 3}, {3, 0},  // fornt
     {4, 5}, {5, 6}, {6, 7}, {7, 4},  // behind
     {0, 4}, {1, 5}, {2, 6}, {3, 7}   // middle connecting line
 };
 
-IMU_Angle_t g_imu_angle = {0.0f, 0.0f};
+static IMU_Angle_t g_imu_angle = {0.0f, 0.0f};
 
 /**
  * @brief Creates the IMU screen with all UI elements including a 3D cube visualization
  *
  * This function initializes and creates the main IMU screen interface with:
- * - Title label showing "StackChan :)"
+ * - Title label showing "JoyMic"
  * - A cube container for 3D visualization
  * - 12 cube edge lines forming a 3D cube
  * - 2 diagonal cross lines for orientation reference
@@ -57,7 +58,7 @@ IMU_Angle_t g_imu_angle = {0.0f, 0.0f};
  *
  * The function handles LVGL locking to ensure thread-safe operations.
  */
-void create_imu_screen()
+void create_imu_screen(void)
 {
     while (!lvgl_port_lock()) {
         vTaskDelay(pdMS_TO_TICKS(10));
@@ -69,7 +70,7 @@ void create_imu_screen()
 
     // Create title
     lv_obj_t *label = lv_label_create(imu_screen);
-    lv_label_set_text(label, "StackChan :)");
+    lv_label_set_text(label, "JoyMic");
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 10);
     lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
 
@@ -139,11 +140,11 @@ void create_imu_screen()
  * @param ay Accelerometer Y-axis reading
  * @param az Accelerometer Z-axis reading
  */
-void update_imu_cube(float ax, float ay, float az)
+static void update_imu_cube(float ax, float ay, float az)
 {
     // Check if the input value is valid
     if (isnan(ax) || isnan(ay) || isnan(az) || isinf(ax) || isinf(ay) || isinf(az)) {
-        printf("Invalid IMU data received!\n");
+        ESP_LOGW(TAG, "Invalid IMU data received");
         return;
     }
 
@@ -265,7 +266,7 @@ IMU_Angle_t update_imu_screen(float ax, float ay, float az, uint8_t bat)
  *
  * After execution, the screen will need to be recreated before use again.
  */
-void ui_imu_screen_destory()
+void ui_imu_screen_destory(void)
 {
     while (!lvgl_port_lock()) {
         vTaskDelay(pdMS_TO_TICKS(10));

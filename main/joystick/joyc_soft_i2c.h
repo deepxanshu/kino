@@ -16,7 +16,6 @@ extern "C" {
 
 bool joyc_soft_i2c_begin(void);
 void joyc_soft_i2c_release(void);
-bool joyc_soft_i2c_scan_id(uint8_t addr);
 bool joyc_soft_i2c_read_bytes(uint8_t reg, uint8_t *data, size_t len);
 
 #ifdef __cplusplus

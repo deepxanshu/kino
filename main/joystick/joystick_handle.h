@@ -10,15 +10,9 @@
 extern "C" {
 #endif
 
-#include "hal/i2c_types.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "../ui/ui_setup_screen.h"
-#include "../ui/ui_running_screen.h"
-#include "../ui/ui_imu_screen.h"
 #include "joystick_basic.h"
 
-joystick_data_t joystick_init();
+joystick_data_t joystick_init(void);
 void joystick_reinit(void);
 void joystick_deinit(void);
 bool joystick_is_ready(void);

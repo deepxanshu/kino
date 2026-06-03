@@ -4,6 +4,12 @@
  * SPDX-License-Identifier: MIT
  */
 #include "ui.h"
+#include "esp_log.h"
+#include "lvgl.h"
+#include "ui_setup_screen.h"
+#include "ui_running_screen.h"
+#include "ui_imu_screen.h"
+#include "ui_mic_screen.h"
 
 /**
  * @brief Switches between different UI screens based on the provided screen ID
@@ -106,7 +112,7 @@ void switch_screen(int screen_id)
  *      3. Sets up the initial UI state for user interaction
  * @warning This function should only be called once during application startup
  */
-void ui_init()
+void ui_init(void)
 {
     create_setup_screen();
     lv_disp_load_scr(setup_screen);

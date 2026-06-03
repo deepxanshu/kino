@@ -10,13 +10,8 @@
 extern "C" {
 #endif
 
+#include <stdint.h>
 #include "lvgl.h"
-#include <math.h>
-#include <stdio.h>
-#include "esp_log.h"
-#include "esp_heap_caps.h"
-
-#define MODE_IMU (2)
 
 typedef struct {
     float pitch;
@@ -30,7 +25,6 @@ extern lv_obj_t *imu_roll_label;
 
 void create_imu_screen(void);
 IMU_Angle_t update_imu_screen(float ax, float ay, float az, uint8_t bat);
-void update_imu_cube(float ax, float ay, float az);
 void ui_imu_screen_destory(void);
 
 #ifdef __cplusplus

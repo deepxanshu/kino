@@ -6,15 +6,12 @@
 #include "M5Unified.h"
 
 extern "C" {
-#include <stdio.h>
 #include "esp_log.h"
-#include "string.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/gpio.h"
 #include "nvs_flash.h"
 #include "esp_system.h"
-#include "lvgl.h"
 
 #include "bt_input.h"
 #include "ui.h"
@@ -27,8 +24,6 @@ using namespace m5;
 
 joystick_data_t joystick_data;
 static const char *TAG = "app_diag";
-
-// extern void lvgl_port_init(M5GFX &gfx);
 
 static void log_porta_levels(const char *stage)
 {
@@ -144,7 +139,7 @@ static uint8_t next_screen_mode(uint8_t current_mode)
     }
 }
 
-void handle_button_press()
+static void handle_button_press(void)
 {
     static bool wait_release = false;
     static bool btnb_pair_hold_done = false;
@@ -265,12 +260,7 @@ void app_main(void)
         joystick_data.accel_y = imu_data.accel.y;
         joystick_data.accel_z = imu_data.accel.z;
 
-#if 0
-        printf("Accel: (%.2f, %.2f, %.2f), Gyro: (%.2f, %.2f, %.2f)\n",
-               joystick_data.accel_x, joystick_data.accel_y, joystick_data.accel_z,
-               joystick_data.gyro_x, joystick_data.gyro_y, joystick_data.gyro_z);
-#endif
-        vTaskDelay(20 / portTICK_PERIOD_MS);
+        vTaskDelay(pdMS_TO_TICKS(20));
     }
 }
 }

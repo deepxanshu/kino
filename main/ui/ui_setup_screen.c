@@ -6,6 +6,7 @@
 #include "ui_setup_screen.h"
 #include "../bluetooth/bt_input.h"
 #include "../lvgl_port.h"
+#include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -34,14 +35,13 @@ static lv_obj_t *create_status_label(lv_obj_t *parent, int y, const char *text)
  * @brief Create the setup screen UI with Bluetooth connection state.
  * @note This function creates a standalone screen with multiple UI elements:
  *       - Title label at the top
- *       - Channel selection dropdown with options 1-14
- *       - ID selection dropdown with options 0-50
- *       - Start button at the bottom for transitioning to running mode
- * @details The function sets up dropdown controls with initial selections and
- *          applies specific styling including background colors and transparency
+ *       - Bluetooth HID/HFP/audio status labels
+ *       - Battery level
+ *       - Button hint
+ * @details The function sets up status labels and keeps all text inside the 135x240 screen.
  * @warning This function should only be called once per application run to avoid memory leaks
  */
-void create_setup_screen()
+void create_setup_screen(void)
 {
     while (!lvgl_port_lock()) {
         vTaskDelay(pdMS_TO_TICKS(10));
@@ -61,7 +61,7 @@ void create_setup_screen()
     lv_obj_clear_flag(setup_screen, LV_OBJ_FLAG_SCROLLABLE);
 
     lv_obj_t *label = lv_label_create(setup_screen);
-    lv_label_set_text(label, "StackChan :)");
+    lv_label_set_text(label, "JoyMic");
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 10);
     lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
 
@@ -76,17 +76,8 @@ void create_setup_screen()
 }
 
 /**
- * @brief Update the setup screen UI based on joystick input
- * @param data Pointer to joystick_data_t structure containing current joystick values and selection mode
- * @note This function handles joystick input to navigate and modify settings:
- *       - Highlights the currently selected dropdown (Channel or ID)
- *       - Increases/decreases values using joystick Y-axis movement
- *       - Updates the internal data structure with selected values
- * @details
- *      1. Changes background color of dropdowns to indicate selection
- *      2. Processes joystick Y-axis input for value modification
- *      3. Updates dropdown selections and corresponding data values
- *      4. Applies debouncing delay to prevent rapid value changes
+ * @brief Update Bluetooth and battery status on the setup screen.
+ * @param data Pointer to joystick data for the current battery level.
  */
 void update_setup_screen(joystick_data_t *data)
 {
@@ -121,7 +112,7 @@ void update_setup_screen(joystick_data_t *data)
  *      1. Deletes the setup screen and all child objects using lv_obj_del
  *      2. Sets all UI object pointers to NULL to prevent dangling references
  */
-void ui_setup_screen_destory()
+void ui_setup_screen_destory(void)
 {
     while (!lvgl_port_lock()) {
         vTaskDelay(pdMS_TO_TICKS(10));

@@ -12,7 +12,7 @@ set(SOURCES
     ui/ui.c
     ui/updown_img.c
     lvgl_port.cpp
-    StackChan-RemoteControl-ESPNow.cpp
+    StickC-JoyMic.cpp
 )
 
 idf_component_register(SRCS ${SOURCES}

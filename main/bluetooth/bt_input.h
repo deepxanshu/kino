@@ -18,7 +18,6 @@ extern "C" {
 
 void bt_input_init(void);
 
-bool bt_input_is_ready(void);
 bool bt_input_hid_connected(void);
 bool bt_input_hfp_connected(void);
 bool bt_input_hfp_audio_connected(void);

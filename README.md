@@ -1,23 +1,37 @@
-# StackChan-RemoteControl-ESPNow
+# StickC JoyMic
 
-This repository is designed to remotely control StackChan servo movements via the `ESPNow` protocol.
+Firmware for an M5StickC-Plus with a JoyC HAT.
 
-## Applicable Devices
+The device exposes a single Classic Bluetooth product name, `StickC JoyMic`:
 
-* StickC-Plus + Hat Mini JoyC
+- `Mouse` mode: JoyC controls a Bluetooth HID mouse, and JoyC press sends left click.
+- `Mic` mode: internal StickC microphone feeds the Bluetooth HFP microphone path.
+- `IMU` mode: screen shows the onboard IMU cube view.
+- `Setup` mode: screen shows Bluetooth HID/HFP/audio status, battery, and pairing hint.
 
-## Compilation Environment
+JoyC and the internal mic both need PortA GPIO0/GPIO26 resources, so the firmware switches those peripherals instead of running both at the same time.
 
-* IDF：ESP-IDF v5.4.2
-* Device Type：esp32
+## Hardware
 
-## Compilation and Flashing
+- M5StickC-Plus
+- M5Stack JoyC HAT at I2C address `0x54`
 
-1. Before compilation, globally search the project for `__has_include(<driver/i2c_master.h>)` in `M5GFX` and replace all occurrences with `0`.
-2. When flashing, specify the baud rate as `1500000`.
+## Build Environment
 
-## Package Firmware
+- ESP-IDF v5.4.2
+- ESP32 target
 
+## Build And Flash
+
+```sh
+. /Users/xurui/esp/esp-idf-v5.4.2/export.sh
+idf.py build
+idf.py -p /dev/cu.usbserial-49523D2FE2 -b 115200 flash
 ```
-esptool.py --chip esp32 merge_bin -o StackChan-RemoteControl-ESPNow-jyy-20251231_0x0.bin 0x1000 build\bootloader\bootloader.bin 0x8000 build\partition_table\partition-table.bin 0x10000 build\StackChan-RemoteControl-ESPNow.bin
+
+## Host Test
+
+```sh
+cc -I main/mic test/test_mic_spectrum.c main/mic/mic_spectrum.c -lm -o /tmp/test_mic_spectrum
+/tmp/test_mic_spectrum
 ```

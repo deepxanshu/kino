@@ -758,11 +758,6 @@ void bt_input_init(void)
              esp_bt_gap_get_bond_device_num());
 }
 
-bool bt_input_is_ready(void)
-{
-    return s_state.bt_ready;
-}
-
 bool bt_input_hid_connected(void)
 {
     return s_state.hid_connected;

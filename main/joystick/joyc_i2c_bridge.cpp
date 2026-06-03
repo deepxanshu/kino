@@ -82,19 +82,6 @@ extern "C" bool joyc_i2c_is_ready(void)
     return s_ready;
 }
 
-extern "C" bool joyc_i2c_scan_id(uint8_t addr)
-{
-    bool ok = false;
-    if (s_backend == JOYC_BACKEND_M5_EX) {
-        ok = M5.Ex_I2C.scanID(addr, JOYC_I2C_FREQ);
-    } else if (s_backend == JOYC_BACKEND_SOFT) {
-        ok = joyc_soft_i2c_scan_id(addr);
-    }
-    ESP_LOGI(TAG, "scan: addr=0x%02x ok=%d gpio0=%d gpio26=%d", addr, ok,
-             gpio_get_level(GPIO_NUM_0), gpio_get_level(GPIO_NUM_26));
-    return ok;
-}
-
 extern "C" bool joyc_i2c_read_bytes(uint8_t reg, uint8_t *data, size_t len)
 {
     if (!s_ready || data == nullptr || len == 0) {

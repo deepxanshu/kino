@@ -6,6 +6,13 @@
 #include "lvgl_port.h"
 #include <M5Unified.h>
 #include "M5GFX.h"
+#include "esp_heap_caps.h"
+#include "esp_log.h"
+#include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+#include "freertos/task.h"
+#include "lvgl.h"
 
 extern "C" {
 
@@ -32,7 +39,7 @@ static void lvgl_rtos_task(void *pvParameter)
 static lv_disp_draw_buf_t draw_buf;
 static void lvgl_flush_cb(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p)
 {
-    M5GFX &gfx      = *(M5GFX *)disp->user_data;
+    (void)disp;
     int w           = (area->x2 - area->x1 + 1);
     int h           = (area->y2 - area->y1 + 1);
     uint32_t pixels = w * h;
@@ -66,11 +73,6 @@ static void lvgl_flush_cb(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t
     lv_disp_flush_ready(disp);
 }
 
-// BtnA / BtnB
-static void lvgl_read_cb(lv_indev_drv_t *indev_driver, lv_indev_data_t *data)
-{
-}
-
 void lvgl_port_init(void)
 {
     lv_init();
@@ -93,14 +95,6 @@ void lvgl_port_init(void)
     disp_drv.draw_buf  = &draw_buf;
     disp_drv.user_data = &M5.Display;
     lv_disp_drv_register(&disp_drv);
-
-    static lv_indev_drv_t indev_drv;
-    lv_indev_drv_init(&indev_drv);
-    indev_drv.type    = LV_INDEV_TYPE_BUTTON;
-    indev_drv.read_cb = lvgl_read_cb;
-    // indev_drv.user_data = &gfx;
-    indev_drv.user_data = &M5.Display;
-    lv_indev_t *indev   = lv_indev_drv_register(&indev_drv);
 
     xGuiSemaphore                                     = xSemaphoreCreateMutex();
     const esp_timer_create_args_t periodic_timer_args = {.callback = &lvgl_tick_timer, .name = "lvgl_tick_timer"};

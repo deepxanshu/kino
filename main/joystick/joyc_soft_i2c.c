@@ -90,22 +90,6 @@ void joyc_soft_i2c_release(void)
     s_backend = JOYC_BUS_BACKEND_NONE;
 }
 
-bool joyc_soft_i2c_scan_id(uint8_t addr)
-{
-    if (s_bus == NULL) {
-        return false;
-    }
-
-    uint8_t scan_buf[16] = {0};
-    uint8_t found = i2c_bus_scan(s_bus, scan_buf, sizeof(scan_buf));
-    for (uint8_t i = 0; i < found && i < sizeof(scan_buf); ++i) {
-        if (scan_buf[i] == addr) {
-            return true;
-        }
-    }
-    return false;
-}
-
 bool joyc_soft_i2c_read_bytes(uint8_t reg, uint8_t *data, size_t len)
 {
     if (s_dev == NULL || data == NULL || len == 0) {

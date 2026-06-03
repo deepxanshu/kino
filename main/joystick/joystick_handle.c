@@ -5,8 +5,14 @@
  */
 #include "joystick_handle.h"
 #include "../bluetooth/bt_input.h"
+#include "../ui/ui_setup_screen.h"
+#include "../ui/ui_running_screen.h"
+#include "../ui/ui_imu_screen.h"
 #include "driver/gpio.h"
+#include "esp_log.h"
+#include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include "freertos/task.h"
 #include "joyc_i2c_bridge.h"
 
 static SemaphoreHandle_t s_joystick_i2c_lock;
@@ -97,7 +103,7 @@ static void mouse_center_track(uint16_t joyX, uint16_t joyY, bool pressed)
  *      2. Probes the JoyC joystick at I2C address 0x54
  * @warning This function assumes the joystick device is at I2C address 0x54
  */
-static void joystick_i2c_init()
+static void joystick_i2c_init(void)
 {
     if (s_joystick_i2c_lock == NULL) {
         s_joystick_i2c_lock = xSemaphoreCreateMutex();
@@ -217,7 +223,6 @@ bool joystick_read_state(uint16_t *joyX, uint16_t *joyY, bool *pressed)
         *joyX = (data[1] << 8) | data[0];
         *joyY = (data[3] << 8) | data[2];
     } else {
-        // ESP_LOGE("I2C Joystick", "Failed to read joystick data");
         *joyX = X_CENTER;
         *joyY = Y_CENTER;
         if ((now - s_last_read_fail_log) >= pdMS_TO_TICKS(JOY_READ_FAIL_LOG_MS)) {
@@ -249,32 +254,25 @@ bool joystick_read_state(uint16_t *joyX, uint16_t *joyY, bool *pressed)
  * @return joystick_data_t Structure containing initialized joystick parameters
  * @note This is the main initialization function exposed to users
  * @details
- *      1. Calls internal： device_joystick_init()
+ *      1. Initializes JoyC I2C access
  *      2. Initializes all fields of 'joystick_data_t'
- *         - channel: 1 (default communication channel)
- *         - id: 0 (default target ID)
  *         - bat: 0 (battery level, to be updated later)
- *         - joyX, joyY: 0 (initial joystick positions)
+ *         - joyX, joyY: center (initial joystick positions)
  *         - screen_mode: MODE_SETUP (start in setup mode)
- *         - select_mode: CHANNEL_SELECT (default selection mode)
  * @return joystick_data_t
  */
-joystick_data_t joystick_init()
+joystick_data_t joystick_init(void)
 {
     joystick_i2c_init();
     joystick_data_t tmp;
-    tmp.channel     = 1;
-    tmp.id          = 0;
     tmp.bat         = 0;
-    tmp.joyX        = 0;
-    tmp.joyY        = 0;
+    tmp.joyX        = X_CENTER;
+    tmp.joyY        = Y_CENTER;
     tmp.joy_pressed = false;
     tmp.accel_x     = 0.0f;
     tmp.accel_y     = 0.0f;
     tmp.accel_z     = 0.0f;
     tmp.screen_mode = MODE_SETUP;
-    tmp.select_mode = CHANNEL_SELECT;
-    tmp.btnB_status = false;
     return tmp;
 }
 
@@ -313,19 +311,15 @@ void handle_setup_screen(void *pvParam)
 }
 
 /**
- * @brief Task to handle joystick running screen, responsible for reading joystick data and sending ESP-NOW control
- * packets
+ * @brief Task to handle mouse mode by reading joystick data and sending HID mouse reports.
  * @param pvParam Pointer to joystick data, pointing to joystick_data_t structure
- * @note This function runs an infinite loop that reads joystick input, processes data, and sends control packets in
- * running mode
+ * @note This function runs an infinite loop that reads joystick input and sends mouse reports in running mode.
  * @details
  *      1. Reads raw X/Y values from the joystick via I2C
  *      2. Updates the running screen display with current values
- *      3. Applies deadzone correction to center the joystick values
- *      4. Maps raw values to yaw/pitch angle ranges (-1280 to 1280 for yaw, 0 to 900 for pitch)
- *      5. Only sends data when changes exceed threshold (5 units) to reduce network traffic
- *      6. Constructs and sends ESP-NOW packet containing target ID, yaw, pitch, speed and button status
- *      7. Each loop iteration has a 30ms delay when in running mode
+ *      3. Tracks center drift while the joystick is idle
+ *      4. Applies deadzone and speed curve conversion for HID X/Y deltas
+ *      5. Sends HID mouse movement and left-click button reports
  */
 void handle_running_screen(void *pvParam)
 {

@@ -6,16 +6,9 @@
 #ifndef UI_H
 #define UI_H
 
-#include "esp_log.h"
-#include "lvgl.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "ui_setup_screen.h"
-#include "ui_running_screen.h"
-#include "ui_imu_screen.h"
-#include "ui_mic_screen.h"
+#include "../joystick/joystick_basic.h"
 
-void ui_init();
+void ui_init(void);
 void switch_screen(int screen_id);
 
 #endif

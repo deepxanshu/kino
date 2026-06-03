@@ -13,8 +13,8 @@ extern "C" {
 #include <stdbool.h>
 #include "lvgl.h"
 #include "../mic/mic_spectrum.h"
+#include "../joystick/joystick_basic.h"
 
-#define MODE_MIC (3)
 #define MIC_BAR_MAX_HEIGHT (100)
 
 extern lv_obj_t *mic_screen;

@@ -6,8 +6,7 @@
 #ifndef LVGL_PORT_H
 #define LVGL_PORT_H
 
-#include "lvgl.h"
-#include "esp_log.h"
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {

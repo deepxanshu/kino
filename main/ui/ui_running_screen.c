@@ -7,6 +7,8 @@
 #include "../lvgl_port.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "esp_log.h"
+#include <math.h>
 
 lv_obj_t* running_screen     = NULL;
 lv_obj_t* joystick_dot       = NULL;
@@ -14,6 +16,11 @@ lv_obj_t* joystick_area      = NULL;
 lv_obj_t* battery_label      = NULL;
 lv_obj_t* mouse_info_label   = NULL;
 lv_obj_t* click_info_label   = NULL;
+
+static int16_t map_range(int16_t value, int16_t in_min, int16_t in_max, int16_t out_min, int16_t out_max)
+{
+    return (int16_t)((value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min);
+}
 
 /**
  * @brief Create the running screen UI with joystick visualization and status information
@@ -28,7 +35,7 @@ lv_obj_t* click_info_label   = NULL;
  *          and a red circular dot that represents the current joystick position
  * @warning This function should only be called once per application run to avoid memory leaks
  */
-void create_running_screen()
+void create_running_screen(void)
 {
     while (!lvgl_port_lock()) {
         vTaskDelay(pdMS_TO_TICKS(10));
@@ -54,7 +61,7 @@ void create_running_screen()
     // Create title
     lv_obj_t* label = lv_label_create(running_screen);
 
-    lv_label_set_text(label, "StackChan :)");
+    lv_label_set_text(label, "JoyMic");
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 10);
     lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
 
@@ -128,17 +135,17 @@ void create_running_screen()
 void update_running_screen(int16_t joyX, int16_t joyY, uint8_t bat, bool pressed, bool bt_connected)
 {
     // Map joystick values to 115x115 area (using your mapping approach)
-    int16_t x_pos = map(joyX, X_MIN, X_MAX, 5, 110);  // Leave 5px margin
-    int16_t y_pos = map(joyY, Y_MIN, Y_MAX, 110, 5);  // Y-axis inverted
+    int16_t x_pos = map_range(joyX, X_MIN, X_MAX, 5, 110);  // Leave 5px margin
+    int16_t y_pos = map_range(joyY, Y_MIN, Y_MAX, 110, 5);  // Y-axis inverted
 
     // Apply deadzone
-    int16_t x_center = map(X_CENTER, X_MIN, X_MAX, 5, 110);
-    int16_t y_center = map(Y_CENTER, Y_MIN, Y_MAX, 110, 5);
+    int16_t x_center = map_range(X_CENTER, X_MIN, X_MAX, 5, 110);
+    int16_t y_center = map_range(Y_CENTER, Y_MIN, Y_MAX, 110, 5);
 
-    if (abs(joyX - X_CENTER) < DEAD_ZONE) {
+    if (abs(joyX - X_CENTER) < JOYSTICK_DEAD_ZONE) {
         x_pos = x_center;
     }
-    if (abs(joyY - Y_CENTER) < DEAD_ZONE) {
+    if (abs(joyY - Y_CENTER) < JOYSTICK_DEAD_ZONE) {
         y_pos = y_center;
     }
 
@@ -166,7 +173,7 @@ void update_running_screen(int16_t joyX, int16_t joyY, uint8_t bat, bool pressed
  *       that reference them, allowing the UI to be recreated or switched
  * @warning The actual UI objects should be destroyed separately using LVGL's object destruction functions
  */
-void ui_running_screen_destory()
+void ui_running_screen_destory(void)
 {
     while (!lvgl_port_lock()) {
         vTaskDelay(pdMS_TO_TICKS(10));
