@@ -14,7 +14,7 @@ On the Magic page, BtnA single-click waits for the double-click window and then 
 - `Mic off / Joystick on`: JoyC controls the Bluetooth HID mouse, and JoyC press sends left click.
 - `Mic on / Joystick off`: internal StickC microphone feeds the Bluetooth HFP microphone path.
 
-BtnA double-click within 450 ms opens `Mic on / Joystick off` and sends one macOS F15 tap over HID.
+BtnA double-click within 450 ms toggles between the same two states and sends one macOS F15 tap over HID.
 Because the HID descriptor includes an F15 keyboard report, macOS may need the `Magic Stick` pairing removed and recreated after flashing this firmware.
 
 In joystick mode, click once and hold the second click within 450 ms to enter scroll mode. While holding,

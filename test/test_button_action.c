@@ -26,7 +26,7 @@ static void test_btna_double_wins_over_single(void)
 
     assert(button_action_update(&state, MODE_RUNNING, true, 1000) == BUTTON_ACTION_NONE);
     assert(button_action_update(&state, MODE_RUNNING, true, 1200) ==
-           BUTTON_ACTION_BTNA_DOUBLE_MIC_F15);
+           BUTTON_ACTION_BTNA_DOUBLE_TOGGLE_F15);
     assert(!state.btna_pending);
 
     assert(button_action_update(&state, MODE_RUNNING, false,

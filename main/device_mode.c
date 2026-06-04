@@ -83,14 +83,14 @@ uint8_t device_mode_next_setup(uint8_t current_mode)
     }
 }
 
-void device_mode_toggle_magic_function(void)
+bool device_mode_toggle_magic_function(void)
 {
     if (app_state_get_mode() != MODE_RUNNING) {
         ESP_LOGI(TAG, "magic toggle ignored mode=%s", device_mode_name(app_state_get_mode()));
-        return;
+        return false;
     }
 
-    (void)device_mode_set_magic_mic_enabled(!s_magic_mic_enabled);
+    return device_mode_set_magic_mic_enabled(!s_magic_mic_enabled);
 }
 
 bool device_mode_set_magic_mic_enabled(bool enabled)

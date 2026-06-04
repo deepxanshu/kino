@@ -18,7 +18,7 @@ extern "C" {
 typedef enum {
     BUTTON_ACTION_NONE = 0,
     BUTTON_ACTION_BTNA_SINGLE,
-    BUTTON_ACTION_BTNA_DOUBLE_MIC_F15,
+    BUTTON_ACTION_BTNA_DOUBLE_TOGGLE_F15,
 } button_action_event_t;
 
 typedef struct {

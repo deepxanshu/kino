@@ -39,7 +39,7 @@ button_action_event_t button_action_update(button_action_state_t *state, uint8_t
     if (btna_clicked) {
         if (state->btna_pending && !time_after_u32(now_ms, state->btna_deadline_ms)) {
             button_action_reset(state);
-            return BUTTON_ACTION_BTNA_DOUBLE_MIC_F15;
+            return BUTTON_ACTION_BTNA_DOUBLE_TOGGLE_F15;
         }
 
         state->btna_pending = true;

@@ -19,7 +19,7 @@ bool device_mode_magic_mic_enabled(void);
 bool device_mode_magic_joystick_enabled(void);
 bool device_mode_peripheral_switching(void);
 uint8_t device_mode_next_setup(uint8_t current_mode);
-void device_mode_toggle_magic_function(void);
+bool device_mode_toggle_magic_function(void);
 bool device_mode_set_magic_mic_enabled(bool enabled);
 void device_mode_enter(uint8_t next_mode);
 

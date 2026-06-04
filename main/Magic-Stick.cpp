@@ -35,7 +35,7 @@ static void log_porta_levels(const char *stage)
 /**
  * @brief Handle Button Press.
  * 1. Click BtnA on Magic to toggle Mic and Joystick after the double-click window.
- * 2. Double-click BtnA on Magic to enter Mic mode and send one F15 tap.
+ * 2. Double-click BtnA on Magic to toggle Mic/Joystick and send one F15 tap.
  * 3. Click BtnB to toggle Setup <-> Magic. BtnB is the only setup entry.
  * 4. Hold BtnB 3s to reopen pairing; hold BtnB 8s to clear bonds and reboot.
  */
@@ -100,11 +100,11 @@ static void handle_button_press(void)
         }
         return;
     }
-    if (action == BUTTON_ACTION_BTNA_DOUBLE_MIC_F15) {
+    if (action == BUTTON_ACTION_BTNA_DOUBLE_TOGGLE_F15) {
         ESP_LOGI(TAG, "BtnA double commit: mode=%s mic=%d joy=%d hid=%s",
                  device_mode_name(current_mode), device_mode_magic_mic_enabled(),
                  device_mode_magic_joystick_enabled(), bt_input_hid_status_text());
-        if (current_mode == MODE_RUNNING && device_mode_set_magic_mic_enabled(true)) {
+        if (current_mode == MODE_RUNNING && device_mode_toggle_magic_function()) {
             bt_input_f15_tap();
         }
         return;
