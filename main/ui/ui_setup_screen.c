@@ -80,7 +80,7 @@ void create_setup_screen(void)
     setup_hfp_label    = create_status_label(setup_screen, 96, "HFP: INIT");
     setup_audio_label  = create_status_label(setup_screen, 124, "Audio: OFF");
     setup_mode_label   = create_status_label(setup_screen, 152, "Bat: 100%");
-    setup_hint_label   = create_status_label(setup_screen, 194, "A:Mode B:Pair");
+    setup_hint_label   = create_status_label(setup_screen, 194, "B:IMU Hold:Pair");
 
     lvgl_port_unlock();
 }
@@ -146,7 +146,7 @@ void update_setup_screen(const joystick_data_t *data)
         lv_label_set_text_fmt(setup_mode_label, "Bat: %d%%", data->bat);
     }
     if (setup_hint_label != NULL) {
-        lv_label_set_text(setup_hint_label, bt_input_is_discoverable() ? "Pairing..." : "A:Mode B:Pair");
+        lv_label_set_text(setup_hint_label, bt_input_is_discoverable() ? "Pairing..." : "B:IMU Hold:Pair");
     }
     lvgl_port_unlock();
 }

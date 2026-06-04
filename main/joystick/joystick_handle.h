@@ -14,6 +14,7 @@ extern "C" {
 
 joystick_data_t joystick_init(void);
 void joystick_reinit(void);
+void joystick_recover(bool power_cycle);
 void joystick_deinit(void);
 bool joystick_is_ready(void);
 bool joystick_read_state(uint16_t *joyX, uint16_t *joyY, bool *pressed);

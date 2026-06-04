@@ -17,6 +17,7 @@
 #include "joyc_button.h"
 #include "joyc_i2c_bridge.h"
 #include "mouse_controller.h"
+#include <inttypes.h>
 
 static SemaphoreHandle_t s_joystick_i2c_lock;
 
@@ -25,10 +26,18 @@ static SemaphoreHandle_t s_joystick_i2c_lock;
 #define JOY_SETUP_LOG_MS 1000
 #define JOY_MOUSE_LOG_MS 250
 #define JOY_READ_FAIL_LOG_MS 1000
+#define JOY_RECOVER_RETRY_MS 2500
+#define JOY_STUCK_RECOVER_RETRY_MS 30000
+#define JOY_STUCK_FAST_ATTEMPTS 2
+#define JOY_READ_FAILS_BEFORE_RELEASE 3
 
 static const char *TAG = "joy_diag";
 
 static TickType_t s_last_read_fail_log = 0;
+static TickType_t s_last_recover_attempt = 0;
+static uint8_t s_xy_read_fail_count = 0;
+static uint8_t s_recover_stuck_count = 0;
+static bool s_recover_stuck_latched = false;
 static uint8_t s_last_button_raw = 0xff;
 static bool s_button_raw_seen = false;
 
@@ -85,6 +94,62 @@ void joystick_reinit(void)
     log_joy_pins("joystick reinit begin");
     joystick_i2c_init();
     log_joy_pins("joystick reinit end");
+}
+
+void joystick_recover(bool power_cycle)
+{
+    log_joy_pins(power_cycle ? "joystick recover begin power" : "joystick recover begin");
+    if (s_joystick_i2c_lock == NULL) {
+        s_joystick_i2c_lock = xSemaphoreCreateMutex();
+    }
+    if (s_joystick_i2c_lock != NULL) {
+        xSemaphoreTake(s_joystick_i2c_lock, portMAX_DELAY);
+    }
+
+    bool ok = joyc_i2c_recover(power_cycle);
+    s_xy_read_fail_count = 0;
+
+    if (s_joystick_i2c_lock != NULL) {
+        xSemaphoreGive(s_joystick_i2c_lock);
+    }
+    ESP_LOGI(TAG, "joystick recover end ok=%d ready=%d", ok, joystick_is_ready());
+    log_joy_pins("joystick recover end");
+}
+
+static void joystick_recover_if_due(const char *reason)
+{
+    TickType_t now = xTaskGetTickCount();
+    uint32_t retry_ms = s_recover_stuck_latched ? JOY_STUCK_RECOVER_RETRY_MS : JOY_RECOVER_RETRY_MS;
+    if (s_last_recover_attempt != 0 &&
+        (now - s_last_recover_attempt) < pdMS_TO_TICKS(retry_ms)) {
+        return;
+    }
+    s_last_recover_attempt = now;
+    ESP_LOGW(TAG, "recover: %s ready=%d stuck=%d retry_ms=%" PRIu32 " gpio0=%d gpio26=%d",
+             reason, joystick_is_ready(), s_recover_stuck_latched, retry_ms,
+             gpio_get_level(GPIO_NUM_0), gpio_get_level(GPIO_NUM_26));
+    joystick_recover(true);
+
+    if (joystick_is_ready()) {
+        s_recover_stuck_count = 0;
+        s_recover_stuck_latched = false;
+        return;
+    }
+
+    bool scl_stuck_low = gpio_get_level(GPIO_NUM_26) == 0;
+    if (scl_stuck_low && s_recover_stuck_count < UINT8_MAX) {
+        s_recover_stuck_count++;
+    } else if (!scl_stuck_low) {
+        s_recover_stuck_count = 0;
+        s_recover_stuck_latched = false;
+    }
+
+    if (s_recover_stuck_count >= JOY_STUCK_FAST_ATTEMPTS && !s_recover_stuck_latched) {
+        s_recover_stuck_latched = true;
+        ESP_LOGW(TAG,
+                 "recover: JoyC SCL stuck low after %u attempts; backing off until power-cycle or next long retry",
+                 s_recover_stuck_count);
+    }
 }
 
 void joystick_deinit(void)
@@ -162,15 +227,25 @@ bool joystick_read_state(uint16_t *joyX, uint16_t *joyY, bool *pressed)
     vTaskDelay(pdMS_TO_TICKS(20));
     xy_ok = xy_ok && joyc_i2c_read_bytes(0x02, &data[2], 2);
     if (xy_ok) {
+        s_xy_read_fail_count = 0;
         *joyX = (data[1] << 8) | data[0];
         *joyY = (data[3] << 8) | data[2];
     } else {
+        if (s_xy_read_fail_count < UINT8_MAX) {
+            s_xy_read_fail_count++;
+        }
         *joyX = X_CENTER;
         *joyY = Y_CENTER;
         if ((now - s_last_read_fail_log) >= pdMS_TO_TICKS(JOY_READ_FAIL_LOG_MS)) {
-            ESP_LOGW(TAG, "read fail: xy via M5.Ex_I2C ready=%d gpio0=%d gpio26=%d",
-                     joyc_i2c_is_ready(), gpio_get_level(GPIO_NUM_0), gpio_get_level(GPIO_NUM_26));
+            ESP_LOGW(TAG, "read fail: xy via M5.Ex_I2C ready=%d fail_count=%u gpio0=%d gpio26=%d",
+                     joyc_i2c_is_ready(), s_xy_read_fail_count, gpio_get_level(GPIO_NUM_0), gpio_get_level(GPIO_NUM_26));
             s_last_read_fail_log = now;
+        }
+        if (s_xy_read_fail_count >= JOY_READ_FAILS_BEFORE_RELEASE) {
+            ESP_LOGW(TAG, "read fail: release stale JoyC bus fail_count=%u gpio0=%d gpio26=%d",
+                     s_xy_read_fail_count, gpio_get_level(GPIO_NUM_0), gpio_get_level(GPIO_NUM_26));
+            joyc_i2c_release();
+            s_xy_read_fail_count = 0;
         }
     }
 
@@ -238,6 +313,9 @@ void handle_setup_screen(void *pvParam)
 
     while (1) {
         if (app_state_get_mode() == MODE_SETUP) {
+            if (!joystick_is_ready()) {
+                joystick_recover_if_due("setup JoyC not ready");
+            }
             uint16_t joy_x = X_CENTER;
             uint16_t joy_y = Y_CENTER;
             bool joy_pressed = false;
@@ -287,6 +365,9 @@ void handle_running_screen(void *pvParam)
 
     while (1) {
         if (app_state_get_mode() == MODE_RUNNING) {
+            if (!joystick_is_ready()) {
+                joystick_recover_if_due("mouse JoyC not ready");
+            }
             uint16_t joy_x = X_CENTER;
             uint16_t joy_y = Y_CENTER;
             bool joy_pressed = false;

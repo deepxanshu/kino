@@ -15,7 +15,8 @@ extern "C" {
 
 const char *device_mode_name(uint8_t mode);
 bool device_mode_needs_joystick(uint8_t mode);
-uint8_t device_mode_next(uint8_t current_mode);
+uint8_t device_mode_next_primary(uint8_t current_mode);
+uint8_t device_mode_next_setup(uint8_t current_mode);
 void device_mode_enter(uint8_t next_mode);
 
 #ifdef __cplusplus

@@ -15,6 +15,7 @@ extern "C" {
 #endif
 
 bool joyc_i2c_begin(void);
+bool joyc_i2c_recover(bool power_cycle);
 void joyc_i2c_release(void);
 bool joyc_i2c_is_ready(void);
 bool joyc_i2c_read_bytes(uint8_t reg, uint8_t *data, size_t len);

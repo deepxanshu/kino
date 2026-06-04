@@ -56,19 +56,27 @@ bool device_mode_needs_joystick(uint8_t mode)
     return mode == MODE_SETUP || mode == MODE_RUNNING;
 }
 
-uint8_t device_mode_next(uint8_t current_mode)
+uint8_t device_mode_next_primary(uint8_t current_mode)
 {
     switch (current_mode) {
-    case MODE_SETUP:
+    case MODE_IMU:
         return MODE_RUNNING;
     case MODE_RUNNING:
         return MODE_MIC;
     case MODE_MIC:
         return MODE_IMU;
-    case MODE_IMU:
-        return MODE_SETUP;
+    default:
+        return current_mode;
+    }
+}
+
+uint8_t device_mode_next_setup(uint8_t current_mode)
+{
+    switch (current_mode) {
+    case MODE_SETUP:
+        return MODE_IMU;
     case MODE_SWITCHING:
-        return MODE_SETUP;
+        return current_mode;
     default:
         return MODE_SETUP;
     }
@@ -98,8 +106,8 @@ void device_mode_enter(uint8_t next_mode)
         app_state_set_mode(next_mode);
         ESP_LOGI(TAG, "mode commit: %s(%u)", device_mode_name(app_state_get_mode()), app_state_get_mode());
         if (device_mode_needs_joystick(next_mode)) {
-            joystick_reinit();
-            ESP_LOGI(TAG, "mode action: joystick reinit done ready=%d", joystick_is_ready());
+            joystick_recover(true);
+            ESP_LOGI(TAG, "mode action: joystick recover done ready=%d", joystick_is_ready());
         }
         return;
     }
@@ -119,9 +127,16 @@ void device_mode_enter(uint8_t next_mode)
     switch_screen(next_mode);
     app_state_set_mode(next_mode);
     ESP_LOGI(TAG, "mode commit: %s(%u)", device_mode_name(app_state_get_mode()), app_state_get_mode());
-    if (device_mode_needs_joystick(next_mode) && !joystick_is_ready()) {
-        ESP_LOGI(TAG, "mode action: target needs joystick, reinit ready=%d", joystick_is_ready());
-        joystick_reinit();
-        ESP_LOGI(TAG, "mode action: joystick reinit done ready=%d", joystick_is_ready());
+    if (device_mode_needs_joystick(next_mode)) {
+        if (!device_mode_needs_joystick(current_mode)) {
+            ESP_LOGI(TAG, "mode action: enter joystick mode from %s, recover ready=%d",
+                     device_mode_name(current_mode), joystick_is_ready());
+            joystick_recover(true);
+            ESP_LOGI(TAG, "mode action: joystick recover done ready=%d", joystick_is_ready());
+        } else if (!joystick_is_ready()) {
+            ESP_LOGI(TAG, "mode action: target needs joystick, reinit ready=%d", joystick_is_ready());
+            joystick_reinit();
+            ESP_LOGI(TAG, "mode action: joystick reinit done ready=%d", joystick_is_ready());
+        }
     }
 }

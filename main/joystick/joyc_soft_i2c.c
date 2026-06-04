@@ -43,20 +43,12 @@ static bool begin_on_port(i2c_port_t port, joyc_bus_backend_t backend)
         return false;
     }
 
-    uint8_t scan_buf[128] = {0};
-    uint8_t found = i2c_bus_scan(s_bus, scan_buf, sizeof(scan_buf));
-    bool probe_ok = false;
-    for (uint8_t i = 0; i < found && i < sizeof(scan_buf); ++i) {
-        ESP_LOGI(TAG, "%s scan: found 0x%02x",
-                 backend == JOYC_BUS_BACKEND_HW ? "hw" : "soft", scan_buf[i]);
-        if (scan_buf[i] == JOYC_ADDR) {
-            probe_ok = true;
-        }
-    }
-
     s_dev = i2c_bus_device_create(s_bus, JOYC_ADDR, 0);
-    ESP_LOGI(TAG, "begin: backend=%s found=%u probe54=%d dev=%p gpio0=%d gpio26=%d",
-             backend == JOYC_BUS_BACKEND_HW ? "hw" : "soft", found, probe_ok, s_dev,
+    uint8_t probe = 0;
+    esp_err_t probe_ret = s_dev != NULL ? i2c_bus_read_bytes(s_dev, 0x00, 1, &probe) : ESP_ERR_INVALID_STATE;
+    bool probe_ok = probe_ret == ESP_OK;
+    ESP_LOGI(TAG, "begin: backend=%s probe54=%d ret=%s dev=%p gpio0=%d gpio26=%d",
+             backend == JOYC_BUS_BACKEND_HW ? "hw" : "soft", probe_ok, esp_err_to_name(probe_ret), s_dev,
              gpio_get_level(GPIO_NUM_0), gpio_get_level(GPIO_NUM_26));
     if (probe_ok && s_dev != NULL) {
         s_backend = backend;
