@@ -17,7 +17,8 @@ extern "C" {
 void create_running_screen(void);
 bool ui_running_screen_is_ready(void);
 bool ui_running_screen_load(bool animated);
-void update_running_screen(int16_t joyX, int16_t joyY, uint8_t bat, bool pressed, bool bt_connected);
+void update_running_screen(int16_t joyX, int16_t joyY, uint8_t bat, bool pressed, bool bt_connected,
+                           float accel_x, float accel_y, float accel_z);
 void ui_running_screen_destory(void);
 
 #ifdef __cplusplus

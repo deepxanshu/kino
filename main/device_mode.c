@@ -59,12 +59,10 @@ bool device_mode_needs_joystick(uint8_t mode)
 uint8_t device_mode_next_primary(uint8_t current_mode)
 {
     switch (current_mode) {
-    case MODE_IMU:
-        return MODE_RUNNING;
     case MODE_RUNNING:
         return MODE_MIC;
     case MODE_MIC:
-        return MODE_IMU;
+        return MODE_RUNNING;
     default:
         return current_mode;
     }
@@ -74,7 +72,10 @@ uint8_t device_mode_next_setup(uint8_t current_mode)
 {
     switch (current_mode) {
     case MODE_SETUP:
-        return MODE_IMU;
+        return MODE_RUNNING;
+    case MODE_RUNNING:
+    case MODE_MIC:
+        return MODE_SETUP;
     case MODE_SWITCHING:
         return current_mode;
     default:

@@ -33,8 +33,8 @@ static void log_porta_levels(const char *stage)
 
 /**
  * @brief Handle Button Press.
- * 1. Click BtnA to cycle IMU -> Mouse -> Mic -> IMU.
- * 2. Click BtnB to toggle Setup <-> IMU. BtnB is the only setup entry.
+ * 1. Click BtnA to toggle Mouse <-> Mic.
+ * 2. Click BtnB to toggle Setup <-> Mouse. BtnB is the only setup entry.
  * 3. Hold BtnB 3s to reopen pairing; hold BtnB 8s to clear bonds and reboot.
  */
 static void handle_button_press(void)
@@ -144,7 +144,6 @@ void app_main(void)
 
     xTaskCreate(handle_setup_screen, "handle_setup_screen", 8192, NULL, 5, NULL);      // handle setup mode
     xTaskCreate(handle_running_screen, "handle_running_screen", 8192, NULL, 5, NULL);  // handle running mode
-    xTaskCreate(handle_imu_screen, "handle_imu_screen", 8192, NULL, 5, NULL);
     xTaskCreate(handle_mic_screen, "handle_mic_screen", 8192, NULL, 5, NULL);
 
     while (1) {

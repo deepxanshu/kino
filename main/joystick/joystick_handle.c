@@ -389,7 +389,8 @@ void handle_running_screen(void *pvParam)
             TickType_t now = xTaskGetTickCount();
             if ((now - last_ui_update) >= pdMS_TO_TICKS(MOUSE_UI_REFRESH_MS)) {
                 update_running_screen(snapshot.joyX, snapshot.joyY, snapshot.bat,
-                                      snapshot.joy_pressed, bt_input_hid_connected());
+                                      snapshot.joy_pressed, bt_input_hid_connected(),
+                                      snapshot.accel_x, snapshot.accel_y, snapshot.accel_z);
                 last_ui_update = now;
             }
 
