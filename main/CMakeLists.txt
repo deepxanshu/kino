@@ -15,7 +15,6 @@ set(SOURCES
     ui/ui_setup_screen.c
     ui/ui_theme.c
     ui/ui.c
-    ui/updown_img.c
     lvgl_port.cpp
     Magic-Stick.cpp
 )

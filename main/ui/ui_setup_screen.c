@@ -12,8 +12,6 @@
 #include "freertos/task.h"
 #include "lvgl.h"
 
-LV_IMG_DECLARE(updown_img);
-
 static lv_obj_t *setup_screen       = NULL;
 static lv_obj_t *setup_device_label = NULL;
 static lv_obj_t *setup_mouse_label  = NULL;

@@ -19,6 +19,7 @@ lv_color_t ui_theme_border_color(void);
 lv_color_t ui_theme_accent_color(void);
 lv_color_t ui_theme_cyan_color(void);
 lv_color_t ui_theme_red_color(void);
+lv_color_t ui_theme_yellow_color(void);
 void ui_theme_apply_screen(lv_obj_t *obj);
 void ui_theme_apply_panel(lv_obj_t *obj);
 void ui_theme_apply_label(lv_obj_t *label);

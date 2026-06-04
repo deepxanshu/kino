@@ -69,16 +69,6 @@ bool device_mode_peripheral_switching(void)
     return s_peripheral_switching;
 }
 
-uint8_t device_mode_next_primary(uint8_t current_mode)
-{
-    switch (current_mode) {
-    case MODE_RUNNING:
-        return MODE_RUNNING;
-    default:
-        return current_mode;
-    }
-}
-
 uint8_t device_mode_next_setup(uint8_t current_mode)
 {
     switch (current_mode) {
@@ -122,7 +112,7 @@ void device_mode_toggle_magic_function(void)
     }
 
     s_magic_mic_enabled = true;
-    bt_input_mouse_send(0, 0, 0, 0);
+    bt_input_mouse_send(0, 0, 0, 0, 0);
     app_state_set_joystick(X_CENTER, Y_CENTER, false);
     ESP_LOGI(TAG, "magic toggle: deinit joystick before mic ready=%d", joystick_is_ready());
     joystick_deinit();

@@ -14,7 +14,6 @@ extern "C" {
 
 void mic_mode_enter(void);
 void mic_mode_exit(void);
-void mic_mode_toggle_muted(void);
 void handle_mic_screen(void *pvParam);
 
 #ifdef __cplusplus

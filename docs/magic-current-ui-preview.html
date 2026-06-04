@@ -111,7 +111,7 @@
       font-family: "Montserrat", Arial, sans-serif;
     }
 
-    .screen[data-design="scope"] {
+    .screen {
       --magic-border: var(--retro-amber);
       --magic-ink: var(--retro-ink);
       --magic-dim: var(--retro-dim);
@@ -136,62 +136,6 @@
       --magic-bat-x: 11px;
       --magic-bat-y: 211px;
       --magic-bat-w: 113px;
-      --magic-bat-h: 12px;
-    }
-
-    .screen[data-design="deck"] {
-      --magic-border: #f0e1af;
-      --magic-ink: #f0e1af;
-      --magic-dim: #5c533a;
-      --magic-accent: #56e072;
-      --magic-cube: #9fe6dc;
-      --magic-red: #ff5b46;
-      --magic-panel-bg: #050505;
-      --magic-panel-size: 54px;
-      --magic-control-h: 27px;
-      --magic-stack-gap: 7px;
-      --magic-joy-x: 9px;
-      --magic-joy-y: 12px;
-      --magic-imu-x: 72px;
-      --magic-imu-y: 12px;
-      --magic-mic-x: 7px;
-      --magic-mic-y: calc(var(--magic-joy-y) + var(--magic-panel-size) + var(--magic-stack-gap));
-      --magic-mic-size: var(--magic-control-h);
-      --magic-audio-x: 43px;
-      --magic-audio-y: calc(var(--magic-joy-y) + var(--magic-panel-size) + var(--magic-stack-gap));
-      --magic-audio-w: 86px;
-      --magic-audio-h: var(--magic-control-h);
-      --magic-bat-x: 14px;
-      --magic-bat-y: 211px;
-      --magic-bat-w: 107px;
-      --magic-bat-h: 11px;
-    }
-
-    .screen[data-design="terminal"] {
-      --magic-border: #48c874;
-      --magic-ink: #bfffd0;
-      --magic-dim: #23472d;
-      --magic-accent: #48c874;
-      --magic-cube: #70ffdc;
-      --magic-red: #ff4d4d;
-      --magic-panel-bg: #010601;
-      --magic-panel-size: 55px;
-      --magic-control-h: 27.5px;
-      --magic-stack-gap: 7px;
-      --magic-joy-x: 7px;
-      --magic-joy-y: 10px;
-      --magic-imu-x: 73px;
-      --magic-imu-y: 10px;
-      --magic-mic-x: 7px;
-      --magic-mic-y: calc(var(--magic-joy-y) + var(--magic-panel-size) + var(--magic-stack-gap));
-      --magic-mic-size: var(--magic-control-h);
-      --magic-audio-x: 43px;
-      --magic-audio-y: calc(var(--magic-joy-y) + var(--magic-panel-size) + var(--magic-stack-gap));
-      --magic-audio-w: 86px;
-      --magic-audio-h: var(--magic-control-h);
-      --magic-bat-x: 10px;
-      --magic-bat-y: 211px;
-      --magic-bat-w: 115px;
       --magic-bat-h: 12px;
     }
 
@@ -542,31 +486,6 @@
       box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.55);
     }
 
-    .screen[data-design="deck"] .magic-view {
-      background: var(--retro-bg);
-    }
-
-    .screen[data-design="deck"] .setup-view {
-      background: var(--retro-bg);
-    }
-
-    .screen[data-design="terminal"] .magic-view {
-      background: #010601;
-    }
-
-    .screen[data-design="terminal"] .setup-view {
-      background: #010601;
-    }
-
-    .design-choice {
-      display: grid;
-      gap: 8px;
-    }
-
-    .design-choice button {
-      min-width: 116px;
-    }
-
     .card {
       background: #202020;
       border: 1px solid #333;
@@ -707,14 +626,14 @@
 
     <section class="layout">
       <div class="device-shell">
-        <div class="screen" id="screen" data-page="setup" data-design="scope">
+        <div class="screen" id="screen" data-page="setup">
           <section class="view setup-view">
             <div class="setup-title-retro">Status</div>
             <div class="setup-line setup-name">Magic Stick</div>
             <div class="setup-line setup-mouse" id="setupMouse">Mouse: OK</div>
             <div class="setup-line setup-hfp" id="setupHfp">HFP: SLC</div>
             <div class="setup-line setup-hfp-chan" id="setupHfpChan">HFP Chan: OFF</div>
-            <div class="setup-line setup-bat" id="setupBat">Battery: 80%</div>
+            <div class="setup-line setup-bat" id="setupBattery">Battery: 80%</div>
             <div class="setup-pair" id="setupPair">Paired</div>
           </section>
 
@@ -753,22 +672,11 @@
           <p id="hint">当前在 Setup。BtnA 在 Setup 无功能；BtnB 进入 Magic。</p>
         </section>
 
-        <section class="card design-choice">
-          <h2>Magic 风格</h2>
-          <div class="buttons">
-            <button data-design="scope" class="active">Retro Scope</button>
-            <button data-design="deck">Pocket Deck</button>
-            <button data-design="terminal">Green CRT</button>
-          </div>
-          <p id="designHint">Retro Scope：推荐方案，像一块小型复古示波仪，暖白线框 + 绿色频谱，最接近“简约但有产品感”。</p>
-        </section>
-
         <section class="card">
           <h2>页面状态</h2>
           <div class="state-grid">
             <div class="state"><b>Page</b><span id="statePage">Setup</span></div>
             <div class="state"><b>Magic Function</b><span id="stateFunction">Mic off / Joystick on</span></div>
-            <div class="state"><b>Magic Style</b><span id="stateDesign">Retro Scope</span></div>
             <div class="state"><b>Mouse</b><span id="stateMouse">OK</span></div>
             <div class="state"><b>HFP</b><span id="stateHfp">SLC</span></div>
             <div class="state"><b>HFP Chan</b><span id="stateChan">OFF</span></div>
@@ -829,9 +737,10 @@
           <div class="buttons">
             <button id="joyMove">摇杆移动</button>
             <button id="joyPress">摇杆按下 / 松开</button>
+            <button id="scrollMode">模拟滑动模式</button>
             <button id="audioPulse">模拟声音输入</button>
           </div>
-          <p>Joystick on 时红点为红色并可控制鼠标；按下时红点变大。Mic on 时红点变灰，频谱随输入变化。</p>
+          <p>Joystick on 时红点为红色并可控制鼠标；按下时红点变大。进入滑动模式后红点变黄。Mic on 时红点变灰，频谱随输入变化。</p>
         </section>
 
         <section class="card">
@@ -879,10 +788,10 @@
       page: 'setup',
       micOn: false,
       joyPressed: false,
+      scrollMode: false,
       joyX: 29,
       joyY: 29,
       battery: 80,
-      design: 'scope',
       mouse: 'OK',
       hfp: 'SLC',
       chan: 'OFF',
@@ -895,7 +804,7 @@
       setupMouse: document.getElementById('setupMouse'),
       setupHfp: document.getElementById('setupHfp'),
       setupHfpChan: document.getElementById('setupHfpChan'),
-      setupBat: document.getElementById('setupBat'),
+      setupBattery: document.getElementById('setupBattery'),
       setupPair: document.getElementById('setupPair'),
       magicMicIcon: document.getElementById('magicMicIcon'),
       joyDot: document.getElementById('joyDot'),
@@ -904,7 +813,6 @@
       hint: document.getElementById('hint'),
       statePage: document.getElementById('statePage'),
       stateFunction: document.getElementById('stateFunction'),
-      stateDesign: document.getElementById('stateDesign'),
       stateMouse: document.getElementById('stateMouse'),
       stateHfp: document.getElementById('stateHfp'),
       stateChan: document.getElementById('stateChan'),
@@ -913,21 +821,10 @@
       hfpSelect: document.getElementById('hfpSelect'),
       chanSelect: document.getElementById('chanSelect'),
       pairSelect: document.getElementById('pairSelect'),
-      batteryRange: document.getElementById('batteryRange'),
-      designHint: document.getElementById('designHint')
+      batteryRange: document.getElementById('batteryRange')
     };
 
     const spectrumIdle = [2, 3, 2, 4, 5, 4, 3, 2, 3, 2, 2, 3];
-    const designLabels = {
-      scope: 'Retro Scope',
-      deck: 'Pocket Deck',
-      terminal: 'Green CRT'
-    };
-    const designHints = {
-      scope: 'Retro Scope：推荐方案，像一块小型复古示波仪，暖白线框 + 绿色频谱，最接近“简约但有产品感”。',
-      deck: 'Pocket Deck：更像老式便携录音机/仪表面板，音频窗口更高，整体更稳重。',
-      terminal: 'Green CRT：单色终端风，绿色线框和扫描线更强，信息最克制也最硬朗。'
-    };
     let tick = 0;
 
     function colorForBattery(value) {
@@ -983,21 +880,21 @@
 
     function render() {
       els.screen.dataset.page = state.page;
-      els.screen.dataset.design = state.design;
 
       els.setupMouse.textContent = `Mouse: ${state.mouse}`;
       els.setupHfp.textContent = `HFP: ${state.hfp}`;
       els.setupHfpChan.textContent = `HFP Chan: ${state.chan}`;
-      els.setupBat.textContent = `Battery: ${state.battery}%`;
+      els.setupBattery.textContent = `Battery: ${state.battery}%`;
       els.setupPair.textContent = state.pair;
 
       const joystickOn = !state.micOn;
       els.magicMicIcon.classList.toggle('is-on', state.micOn);
       els.magicMicIcon.setAttribute('aria-label', state.micOn ? 'Mic on' : 'Mic off');
-      els.joyDot.style.setProperty('--dot-size', state.joyPressed ? '16px' : '8px');
+      els.joyDot.style.setProperty('--dot-size', (state.joyPressed || state.scrollMode) ? '16px' : '8px');
       els.joyDot.style.setProperty('--dot-x', `${state.joyX}px`);
       els.joyDot.style.setProperty('--dot-y', `${state.joyY}px`);
-      els.joyDot.style.setProperty('--dot-color', joystickOn ? 'var(--magic-red)' : 'var(--magic-dim)');
+      els.joyDot.style.setProperty('--dot-color',
+        state.scrollMode ? 'var(--yellow)' : (joystickOn ? 'var(--magic-red)' : 'var(--magic-dim)'));
 
       const cells = Array.from(els.batteryCells.children);
       const filledCells = Math.ceil((state.battery / 100) * cells.length);
@@ -1008,7 +905,6 @@
 
       els.statePage.textContent = state.page === 'setup' ? 'Setup' : 'Magic';
       els.stateFunction.textContent = state.micOn ? 'Mic on / Joystick off' : 'Mic off / Joystick on';
-      els.stateDesign.textContent = designLabels[state.design];
       els.stateMouse.textContent = state.mouse;
       els.stateHfp.textContent = state.hfp;
       els.stateChan.textContent = state.chan;
@@ -1022,16 +918,13 @@
       els.chanSelect.value = state.chan;
       els.pairSelect.value = state.pair;
       els.batteryRange.value = state.battery;
-      els.designHint.textContent = designHints[state.design];
-      document.querySelectorAll('button[data-design]').forEach((button) => {
-        button.classList.toggle('active', button.dataset.design === state.design);
-      });
       layoutBars(Array.from(els.audioBars.children));
     }
 
     document.getElementById('btnB').addEventListener('click', () => {
       state.page = state.page === 'setup' ? 'magic' : 'setup';
       state.joyPressed = false;
+      state.scrollMode = false;
       render();
     });
 
@@ -1042,6 +935,7 @@
       }
       state.micOn = !state.micOn;
       state.joyPressed = false;
+      state.scrollMode = false;
       if (state.micOn) {
         state.chan = 'ON';
       }
@@ -1063,6 +957,7 @@
       state.chan = 'OFF';
       state.micOn = false;
       state.joyPressed = false;
+      state.scrollMode = false;
       render();
     });
 
@@ -1079,6 +974,16 @@
       state.page = 'magic';
       if (!state.micOn) {
         state.joyPressed = !state.joyPressed;
+        state.scrollMode = false;
+      }
+      render();
+    });
+
+    document.getElementById('scrollMode').addEventListener('click', () => {
+      state.page = 'magic';
+      if (!state.micOn) {
+        state.scrollMode = !state.scrollMode;
+        state.joyPressed = state.scrollMode;
       }
       render();
     });
@@ -1111,13 +1016,6 @@
     document.querySelectorAll('button[data-battery]').forEach((button) => {
       button.addEventListener('click', () => {
         state.battery = Number(button.dataset.battery);
-        render();
-      });
-    });
-    document.querySelectorAll('button[data-design]').forEach((button) => {
-      button.addEventListener('click', () => {
-        state.design = button.dataset.design;
-        state.page = 'magic';
         render();
       });
     });

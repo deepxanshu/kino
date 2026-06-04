@@ -406,34 +406,39 @@ void handle_running_screen(void *pvParam)
             }
 
             TickType_t now = xTaskGetTickCount();
-            if ((now - last_ui_update) >= pdMS_TO_TICKS(MOUSE_UI_REFRESH_MS)) {
-                update_running_screen(snapshot.joyX, snapshot.joyY, snapshot.bat,
-                                      snapshot.joy_pressed, bt_input_hid_connected(),
-                                      snapshot.accel_x, snapshot.accel_y, snapshot.accel_z,
-                                      &empty_spectrum, false, true,
-                                      bt_input_hfp_connected(), bt_input_hfp_audio_connected(),
-                                      bt_input_hfp_pcm_sample_rate());
-                last_ui_update = now;
-            }
-
             joy_x = snapshot.joyX;
             joy_y = snapshot.joyY;
             mouse_controller_report_t report =
-                mouse_controller_update(&mouse, joy_x, joy_y, snapshot.joy_pressed, last_pressed);
+                mouse_controller_update(&mouse, joy_x, joy_y, snapshot.joy_pressed, last_pressed,
+                                        (uint32_t)(now * portTICK_PERIOD_MS));
+            if ((now - last_ui_update) >= pdMS_TO_TICKS(MOUSE_UI_REFRESH_MS)) {
+                update_running_screen(snapshot.joyX, snapshot.joyY, snapshot.bat,
+                                      snapshot.joy_pressed,
+                                      snapshot.accel_x, snapshot.accel_y, snapshot.accel_z,
+                                      &empty_spectrum, false, true, report.scroll_active);
+                last_ui_update = now;
+            }
             if ((now - last_mouse_log) >= pdMS_TO_TICKS(JOY_MOUSE_LOG_MS)) {
                 ESP_LOGI(TAG,
-                         "mouse raw: ok=%d x=%u y=%u pressed=%d center=(%d,%d)->(%d,%d) raw_delta=(%d,%d) report=(%d,%d,%u) send=%d hid=%d",
+                         "mouse raw: ok=%d x=%u y=%u pressed=%d center=(%d,%d)->(%d,%d) raw_delta=(%d,%d) report=(%d,%d,%d,%d,%u) scroll=%d send=%d hid=%d",
                          read_ok, snapshot.joyX, snapshot.joyY, snapshot.joy_pressed,
                          report.center_before_x, report.center_before_y, mouse.center_x, mouse.center_y,
                          (int16_t)(joy_x - mouse.center_x), (int16_t)(joy_y - mouse.center_y),
-                         report.dx, report.dy, report.buttons, report.should_send, bt_input_hid_connected());
+                         report.dx, report.dy, report.wheel, report.pan, report.buttons,
+                         report.scroll_active, report.should_send, bt_input_hid_connected());
                 last_mouse_log = now;
+            }
+            if (report.scroll_entered) {
+                ESP_LOGI(TAG, "mouse scroll enter: hid=%d", bt_input_hid_connected());
+            }
+            if (report.scroll_exited) {
+                ESP_LOGI(TAG, "mouse scroll exit: hid=%d", bt_input_hid_connected());
             }
             if (report.pressed_changed) {
                 ESP_LOGI(TAG, "mouse button: raw_btn=%d hid=%d", snapshot.joy_pressed, bt_input_hid_connected());
             }
             if (report.should_send) {
-                bt_input_mouse_send(report.buttons, report.dx, report.dy, 0);
+                bt_input_mouse_send(report.buttons, report.dx, report.dy, report.wheel, report.pan);
                 last_pressed = snapshot.joy_pressed;
             }
             vTaskDelay(pdMS_TO_TICKS(MOUSE_POLL_MS));

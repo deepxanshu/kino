@@ -96,6 +96,8 @@ static volatile uint32_t s_hfp_tx_packet_len = HFP_AUDIO_CVSD_PACKET_LEN;
 static volatile bool s_hfp_tx_started;
 static int16_t s_hfp_last_sample;
 
+static void bt_input_hfp_audio_disconnect(void);
+
 const char *bt_input_hfp_codec_text(void)
 {
     return s_state.hfp_audio_msbc ? "mSBC" : "CVSD";
@@ -963,11 +965,6 @@ bool bt_input_hid_connected(void)
     return s_state.hid_connected;
 }
 
-bool bt_input_hfp_connected(void)
-{
-    return s_state.hfp_slc_connected;
-}
-
 bool bt_input_hfp_audio_connected(void)
 {
     return s_state.hfp_audio_connected;
@@ -1082,15 +1079,15 @@ void bt_input_clear_bonds(void)
     bt_input_update_scan_mode();
 }
 
-void bt_input_mouse_send(uint8_t buttons, int8_t dx, int8_t dy, int8_t wheel)
+void bt_input_mouse_send(uint8_t buttons, int8_t dx, int8_t dy, int8_t wheel, int8_t pan)
 {
     static TickType_t last_drop_log = 0;
 
     if (!s_state.hid_connected) {
         TickType_t now = xTaskGetTickCount();
         if ((now - last_drop_log) >= pdMS_TO_TICKS(HID_DROP_LOG_MS)) {
-            ESP_LOGW(TAG, "mouse report dropped: hid disconnected ready=%d discoverable=%d buttons=%u dx=%d dy=%d wheel=%d",
-                     s_state.hid_ready, s_state.discoverable, buttons, dx, dy, wheel);
+            ESP_LOGW(TAG, "mouse report dropped: hid disconnected ready=%d discoverable=%d buttons=%u dx=%d dy=%d wheel=%d pan=%d",
+                     s_state.hid_ready, s_state.discoverable, buttons, dx, dy, wheel, pan);
             last_drop_log = now;
         }
         return;
@@ -1101,6 +1098,7 @@ void bt_input_mouse_send(uint8_t buttons, int8_t dx, int8_t dy, int8_t wheel)
     s_state.mouse_report[1] = (uint8_t)dx;
     s_state.mouse_report[2] = (uint8_t)dy;
     s_state.mouse_report[3] = (uint8_t)wheel;
+    s_state.mouse_report[4] = (uint8_t)pan;
 
     uint8_t report_id = 0;
     uint16_t report_len = BT_HID_MOUSE_REPORT_SIZE;
@@ -1112,8 +1110,8 @@ void bt_input_mouse_send(uint8_t buttons, int8_t dx, int8_t dy, int8_t wheel)
     esp_err_t ret = esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, report_id, report_len,
                                                   s_state.mouse_report);
     if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "mouse report send failed: %s id=%u len=%u buttons=%u dx=%d dy=%d wheel=%d",
-                 esp_err_to_name(ret), report_id, report_len, buttons, dx, dy, wheel);
+        ESP_LOGW(TAG, "mouse report send failed: %s id=%u len=%u buttons=%u dx=%d dy=%d wheel=%d pan=%d",
+                 esp_err_to_name(ret), report_id, report_len, buttons, dx, dy, wheel, pan);
     }
     bt_input_unlock();
 }
@@ -1146,22 +1144,7 @@ void bt_input_hfp_mic_set_enabled(bool enabled)
     }
 }
 
-void bt_input_hfp_audio_request(void)
-{
-    if (!s_state.hfp_slc_connected || !s_state.hfp_has_peer) {
-        ESP_LOGI(TAG, "HFP audio request skipped: slc=%d has_peer=%d", s_state.hfp_slc_connected,
-                 s_state.hfp_has_peer);
-        return;
-    }
-    if (s_state.hfp_audio_connected &&
-        (s_state.hfp_audio_msbc || (s_state.hfp_peer_features & ESP_HF_CLIENT_PEER_FEAT_CODEC) == 0)) {
-        return;
-    }
-
-    bt_input_hfp_audio_request_internal("explicit");
-}
-
-void bt_input_hfp_audio_disconnect(void)
+static void bt_input_hfp_audio_disconnect(void)
 {
     if (!s_state.hfp_has_peer || (!s_state.hfp_audio_connected && !s_state.hfp_audio_connecting)) {
         return;

@@ -120,7 +120,7 @@ static lv_color_t battery_segment_color(uint8_t battery_percent)
         return ui_theme_accent_color();
     }
     if (battery_percent >= 20) {
-        return lv_color_make(255, 210, 31);
+        return ui_theme_yellow_color();
     }
     return ui_theme_bg_color();
 }
@@ -443,11 +443,10 @@ bool ui_running_screen_load(bool animated)
 /**
  * @brief Update joystick, IMU, audio, and status on the Magic page.
  */
-void update_running_screen(int16_t joyX, int16_t joyY, uint8_t bat, bool pressed, bool bt_connected,
+void update_running_screen(int16_t joyX, int16_t joyY, uint8_t bat, bool pressed,
                            float accel_x, float accel_y, float accel_z,
                            const mic_spectrum_data_t *spectrum, bool mic_running,
-                           bool joystick_enabled, bool hfp_connected, bool audio_connected,
-                           uint32_t sample_rate)
+                           bool joystick_enabled, bool scroll_active)
 {
     int16_t dot_size = pressed ? MOUSE_DOT_PRESSED_SIZE : MOUSE_DOT_SIZE;
     int16_t min_pos = dot_size / 2;
@@ -481,18 +480,18 @@ void update_running_screen(int16_t joyX, int16_t joyY, uint8_t bat, bool pressed
 
     lv_obj_set_size(joystick_dot, dot_size, dot_size);
     lv_obj_align(joystick_dot, LV_ALIGN_TOP_LEFT, x_pos - (dot_size / 2), y_pos - (dot_size / 2));
-    lv_obj_set_style_bg_color(joystick_dot,
-                              joystick_enabled ? ui_theme_red_color() : ui_theme_grid_color(),
-                              LV_PART_MAIN);
+    lv_color_t dot_color = ui_theme_grid_color();
+    if (scroll_active) {
+        dot_color = ui_theme_yellow_color();
+    } else if (joystick_enabled) {
+        dot_color = ui_theme_red_color();
+    }
+    lv_obj_set_style_bg_color(joystick_dot, dot_color, LV_PART_MAIN);
     update_mouse_imu_cube(accel_x, accel_y, accel_z);
     update_mic_icon(mic_running);
     update_magic_audio_bars(mic_running ? spectrum : NULL);
     update_battery_bar(bat);
 
-    (void)bt_connected;
-    (void)hfp_connected;
-    (void)audio_connected;
-    (void)sample_rate;
     lvgl_port_unlock();
 }
 

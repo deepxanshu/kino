@@ -42,6 +42,11 @@ lv_color_t ui_theme_red_color(void)
     return lv_color_make(255, 74, 63);
 }
 
+lv_color_t ui_theme_yellow_color(void)
+{
+    return lv_color_make(255, 210, 31);
+}
+
 void ui_theme_apply_screen(lv_obj_t *obj)
 {
     if (obj == NULL) {

@@ -12,7 +12,7 @@
 extern "C" {
 #endif
 
-#define BT_HID_MOUSE_REPORT_SIZE (4)
+#define BT_HID_MOUSE_REPORT_SIZE (5)
 
 esp_hidd_app_param_t *bt_hid_mouse_app_param(void);
 esp_hidd_qos_param_t *bt_hid_mouse_qos_param(void);

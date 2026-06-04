@@ -20,11 +20,10 @@ extern "C" {
 void create_running_screen(void);
 bool ui_running_screen_is_ready(void);
 bool ui_running_screen_load(bool animated);
-void update_running_screen(int16_t joyX, int16_t joyY, uint8_t bat, bool pressed, bool bt_connected,
+void update_running_screen(int16_t joyX, int16_t joyY, uint8_t bat, bool pressed,
                            float accel_x, float accel_y, float accel_z,
                            const mic_spectrum_data_t *spectrum, bool mic_running,
-                           bool joystick_enabled, bool hfp_connected, bool audio_connected,
-                           uint32_t sample_rate);
+                           bool joystick_enabled, bool scroll_active);
 void ui_running_screen_destory(void);
 
 #ifdef __cplusplus
