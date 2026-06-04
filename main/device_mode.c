@@ -42,10 +42,6 @@ const char *device_mode_name(uint8_t mode)
         return "Setup";
     case MODE_RUNNING:
         return "Magic";
-    case MODE_IMU:
-        return "IMU";
-    case MODE_MIC:
-        return "Mic";
     case MODE_SWITCHING:
         return "Switching";
     default:
@@ -89,8 +85,6 @@ uint8_t device_mode_next_setup(uint8_t current_mode)
     case MODE_SETUP:
         return MODE_RUNNING;
     case MODE_RUNNING:
-        return MODE_SETUP;
-    case MODE_MIC:
         return MODE_SETUP;
     case MODE_SWITCHING:
         return current_mode;
@@ -155,7 +149,7 @@ void device_mode_enter(uint8_t next_mode)
     app_state_set_mode(MODE_SWITCHING);
     vTaskDelay(pdMS_TO_TICKS(20));
 
-    if ((current_mode == MODE_MIC || s_magic_mic_enabled) && next_mode != MODE_MIC) {
+    if (s_magic_mic_enabled) {
         ESP_LOGI(TAG, "mode action: exit mic before entering %s", device_mode_name(next_mode));
         mic_mode_exit();
         reset_shared_port_a_pins(pdMS_TO_TICKS(120));

@@ -18,19 +18,52 @@ static lv_obj_t *setup_screen       = NULL;
 static lv_obj_t *setup_device_label = NULL;
 static lv_obj_t *setup_mouse_label  = NULL;
 static lv_obj_t *setup_hfp_label    = NULL;
-static lv_obj_t *setup_audio_label  = NULL;
+static lv_obj_t *setup_hfp_chan_label = NULL;
 static lv_obj_t *setup_mode_label   = NULL;
-static lv_obj_t *setup_hint_label   = NULL;
+static lv_obj_t *setup_pairing_label = NULL;
+
+static lv_point_t s_setup_underline_points[2] = {{0, 0}, {117, 0}};
 
 static lv_obj_t *create_status_label(lv_obj_t *parent, int y, const char *text)
 {
     lv_obj_t *label = lv_label_create(parent);
     lv_label_set_text(label, text);
     lv_label_set_long_mode(label, LV_LABEL_LONG_CLIP);
-    lv_obj_set_width(label, 125);
-    lv_obj_align(label, LV_ALIGN_TOP_LEFT, 8, y);
+    lv_obj_set_width(label, 117);
+    lv_obj_align(label, LV_ALIGN_TOP_LEFT, 9, y);
     lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
     ui_theme_apply_label(label);
+
+    lv_obj_t *underline = lv_line_create(parent);
+    lv_line_set_points(underline, s_setup_underline_points, 2);
+    lv_obj_align(underline, LV_ALIGN_TOP_LEFT, 9, y + 18);
+    lv_obj_set_style_line_color(underline, ui_theme_border_color(), LV_PART_MAIN);
+    lv_obj_set_style_line_width(underline, 1, LV_PART_MAIN);
+
+    return label;
+}
+
+static lv_obj_t *create_bottom_status_label(lv_obj_t *parent, int y, const char *text)
+{
+    lv_obj_t *box = lv_obj_create(parent);
+    lv_obj_set_size(box, 97, 22);
+    lv_obj_align(box, LV_ALIGN_TOP_MID, 0, y);
+    lv_obj_set_style_bg_color(box, ui_theme_bg_color(), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(box, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_border_color(box, ui_theme_border_color(), LV_PART_MAIN);
+    lv_obj_set_style_border_width(box, 1, LV_PART_MAIN);
+    lv_obj_set_style_radius(box, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(box, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(box, LV_OBJ_FLAG_SCROLLABLE);
+
+    lv_obj_t *label = lv_label_create(box);
+    lv_label_set_text(label, text);
+    lv_label_set_long_mode(label, LV_LABEL_LONG_CLIP);
+    lv_obj_set_width(label, 91);
+    lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 2);
+    lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(label, ui_theme_accent_color(), LV_PART_MAIN);
     return label;
 }
 
@@ -38,9 +71,9 @@ static lv_obj_t *create_status_label(lv_obj_t *parent, int y, const char *text)
  * @brief Create the setup screen UI with Bluetooth connection state.
  * @note This function creates a standalone screen with multiple UI elements:
  *       - Title label at the top
- *       - Bluetooth HID/HFP/audio status labels
+ *       - Bluetooth HID/HFP status labels
  *       - Battery level
- *       - Button hint
+ *       - Pairing status
  * @details The function sets up status labels and keeps all text inside the 135x240 screen.
  * @warning This function should only be called once per application run to avoid memory leaks
  */
@@ -70,17 +103,18 @@ void create_setup_screen(void)
     ui_theme_apply_screen(setup_screen);
 
     lv_obj_t *label = lv_label_create(setup_screen);
-    lv_label_set_text(label, "JoyMic");
-    lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 10);
+    lv_label_set_text(label, "Status");
+    lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 11);
     lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
     ui_theme_apply_label(label);
 
-    setup_device_label = create_status_label(setup_screen, 40, "StickC JoyMic");
-    setup_mouse_label  = create_status_label(setup_screen, 68, "Mouse: INIT");
-    setup_hfp_label    = create_status_label(setup_screen, 96, "HFP: INIT");
-    setup_audio_label  = create_status_label(setup_screen, 124, "Audio: OFF");
-    setup_mode_label   = create_status_label(setup_screen, 152, "Bat: 100%");
-    setup_hint_label   = create_status_label(setup_screen, 194, "B:IMU Hold:Pair");
+    setup_device_label = create_status_label(setup_screen, 42, "Magic Stick");
+    lv_obj_set_style_text_color(setup_device_label, ui_theme_accent_color(), LV_PART_MAIN);
+    setup_mouse_label  = create_status_label(setup_screen, 67, "Mouse: INIT");
+    setup_hfp_label    = create_status_label(setup_screen, 91, "HFP: INIT");
+    setup_hfp_chan_label = create_status_label(setup_screen, 115, "HFP Chan: OFF");
+    setup_mode_label   = create_status_label(setup_screen, 139, "Battery: 100%");
+    setup_pairing_label = create_bottom_status_label(setup_screen, 196, "Discoverable");
 
     lvgl_port_unlock();
 }
@@ -131,7 +165,7 @@ void update_setup_screen(const joystick_data_t *data)
         return;
     }
     if (setup_device_label != NULL) {
-        lv_label_set_text_fmt(setup_device_label, "Name: %s", BT_INPUT_DEVICE_NAME);
+        lv_label_set_text(setup_device_label, BT_INPUT_DEVICE_NAME);
     }
     if (setup_mouse_label != NULL) {
         lv_label_set_text_fmt(setup_mouse_label, "Mouse: %s", bt_input_hid_status_text());
@@ -139,14 +173,15 @@ void update_setup_screen(const joystick_data_t *data)
     if (setup_hfp_label != NULL) {
         lv_label_set_text_fmt(setup_hfp_label, "HFP: %s", bt_input_hfp_status_text());
     }
-    if (setup_audio_label != NULL) {
-        lv_label_set_text_fmt(setup_audio_label, "Audio: %s", bt_input_audio_status_text());
+    if (setup_hfp_chan_label != NULL) {
+        lv_label_set_text_fmt(setup_hfp_chan_label, "HFP Chan: %s",
+                              bt_input_hfp_audio_connected() ? "ON" : "OFF");
     }
     if (setup_mode_label != NULL) {
-        lv_label_set_text_fmt(setup_mode_label, "Bat: %d%%", data->bat);
+        lv_label_set_text_fmt(setup_mode_label, "Battery: %d%%", data->bat);
     }
-    if (setup_hint_label != NULL) {
-        lv_label_set_text(setup_hint_label, bt_input_is_discoverable() ? "Pairing..." : "B:IMU Hold:Pair");
+    if (setup_pairing_label != NULL) {
+        lv_label_set_text(setup_pairing_label, bt_input_pairing_status_text());
     }
     lvgl_port_unlock();
 }
@@ -172,7 +207,7 @@ void ui_setup_screen_destory(void)
     setup_device_label = NULL;
     setup_mouse_label  = NULL;
     setup_hfp_label    = NULL;
-    setup_audio_label  = NULL;
+    setup_hfp_chan_label = NULL;
     setup_mode_label   = NULL;
-    setup_hint_label   = NULL;
+    setup_pairing_label = NULL;
 }

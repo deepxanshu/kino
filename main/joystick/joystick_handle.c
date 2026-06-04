@@ -9,7 +9,6 @@
 #include "../device_mode.h"
 #include "../ui/ui_setup_screen.h"
 #include "../ui/ui_running_screen.h"
-#include "../ui/ui_imu_screen.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -440,28 +439,6 @@ void handle_running_screen(void *pvParam)
             vTaskDelay(pdMS_TO_TICKS(MOUSE_POLL_MS));
         } else {
             mouse_mode_active = false;
-            vTaskDelay(200 / portTICK_PERIOD_MS);
-        }
-    }
-}
-
-/**
- * @brief Task to keep the IMU visualization updated while the IMU page is active.
- *
- * The main loop owns sensor sampling; this task only pushes the latest accelerometer
- * values and battery level into the LVGL IMU screen.
- */
-void handle_imu_screen(void *pvParam)
-{
-    (void)pvParam;
-
-    while (1) {
-        if (app_state_get_mode() == MODE_IMU) {
-            joystick_data_t snapshot = app_state_snapshot();
-            update_imu_screen(snapshot.accel_x, snapshot.accel_y, snapshot.accel_z, snapshot.bat);
-
-            vTaskDelay(30 / portTICK_PERIOD_MS);
-        } else {
             vTaskDelay(200 / portTICK_PERIOD_MS);
         }
     }

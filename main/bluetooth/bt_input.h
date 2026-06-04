@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-#define BT_INPUT_DEVICE_NAME "StickC JoyMic"
+#define BT_INPUT_DEVICE_NAME "Magic Stick"
 
 void bt_input_init(void);
 
@@ -26,6 +26,7 @@ bool bt_input_is_discoverable(void);
 const char *bt_input_hid_status_text(void);
 const char *bt_input_hfp_status_text(void);
 const char *bt_input_audio_status_text(void);
+const char *bt_input_pairing_status_text(void);
 const char *bt_input_hfp_codec_text(void);
 uint32_t bt_input_hfp_pcm_sample_rate(void);
 

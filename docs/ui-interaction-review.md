@@ -1,0 +1,257 @@
+# Magic Stick UI and Interaction Review
+
+本文档整理当前固件的 UI 页面、显示内容、按键交互和外设状态流，供产品交互 review 使用。
+
+当前版本定位:
+
+- 产品名: `Magic Stick`
+- 蓝牙设备名: `Magic Stick`
+- 硬件: M5StickC-Plus + JoyC 摇杆 + 内置 IMU + 内置 PDM mic
+- 蓝牙能力: Classic BT HID Mouse + Classic BT HFP mic
+- 屏幕尺寸: `135 x 240`
+- UI 主题: 黑底、白字、深灰网格
+- 当前页面: `Setup` 和 `Magic`
+
+## 1. 页面总览
+
+当前固件只保留两个产品页面。
+
+| 页面 | Mode | 入口 | 作用 |
+| --- | --- | --- | --- |
+| Setup | `MODE_SETUP` | 开机默认、Magic 页面按 BtnB | 查看蓝牙状态、电量和维护连接 |
+| Magic | `MODE_RUNNING` | Setup 页面按 BtnB | 合并展示摇杆、IMU、音频，并承载鼠标/mic 功能 |
+
+旧的独立 IMU 页面和独立 Mic 页面已废弃并从源码中删除。IMU 3D 展示和 mic 频谱仍保留在 Magic 页面内。
+
+## 2. 全局交互
+
+| 操作 | 当前页面 | 行为 |
+| --- | --- | --- |
+| BtnB 短按 | Setup | 进入 Magic |
+| BtnB 短按 | Magic | 返回 Setup |
+| BtnA 短按 | Magic | 切换 `Mic on / Joystick off` 与 `Mic off / Joystick on` |
+| BtnA 短按 | Setup | 无功能 |
+| BtnB 长按 3s | 任意页面 | 重新进入可发现/配对状态 |
+| BtnB 长按 8s | 任意页面 | 清除蓝牙 bonding 并重启 |
+
+按键保护逻辑:
+
+- 每次短按动作后等待 BtnA 和 BtnB 都松开。
+- 松开后进入 `300ms` cooldown，避免连续误触发。
+- BtnB 长按 3s 和 8s 使用独立 latch，避免同一次长按重复触发。
+
+## 3. Setup 页面
+
+### 3.1 页面用途
+
+Setup 是设备维护和连接状态页。它不承载摇杆控制，也不展示 IMU 或音频图形。
+
+### 3.2 当前显示内容
+
+| y 坐标 | 显示 | 含义 |
+| --- | --- | --- |
+| 10 | `Setup` | 页面标题 |
+| 40 | `Name: Magic Stick` | 蓝牙设备名 |
+| 68 | `Mouse: <status>` | HID mouse profile 状态 |
+| 96 | `HFP: <status>` | HFP service level connection 状态 |
+| 124 | `HFP Chan: <ON/OFF>` | HFP audio channel 是否打开 |
+| 152 | `Bat: <percent>%` | 电池电量 |
+| 194 | `Discoverable` / `Pairing` / `Paired` | 配对状态 |
+
+底部只显示英文配对状态值，不带任何前缀，也不显示旧的跳转提示。
+
+### 3.3 状态字段含义
+
+| 字段 | 常见值 | 说明 |
+| --- | --- | --- |
+| `Mouse` | `OK` / `WAIT` / `INIT` | 电脑侧 HID mouse 是否已连接 |
+| `HFP` | `SLC` / `WAIT` / `INIT` | 电脑侧 HFP 控制链路是否建立 |
+| `HFP Chan` | `ON` / `OFF` | 电脑侧是否已打开 HFP audio channel |
+| `Bat` | `0%` - `100%` | AXP192 电量读数 |
+| 底部状态 | `Discoverable` / `Pairing` / `Paired` | 当前蓝牙配对状态 |
+
+## 4. Magic 页面
+
+### 4.1 页面用途
+
+Magic 是唯一工作页面。它同时展示:
+
+- JoyC 摇杆位置和点击状态
+- IMU 3D 姿态 cube
+- Mic 频谱/电平
+- 底部电量格和功能开关状态
+
+Magic 页面没有顶部标题，也不显示电量文字。电量改为底部电量格显示。
+
+### 4.2 布局
+
+| 区域 | 位置 | 内容 |
+| --- | --- | --- |
+| 左上面板 | x=6, y=8, 58x58 | 摇杆平面和红色摇杆点 |
+| 右上面板 | x=71, y=8, 58x58 | IMU 3D cube |
+| 中部面板 | x=6, y=72, 123x44 | Mic 频谱柱状图 |
+| 状态行 1 | y=124 | `J:<ON/OFF> M:<ON/OFF>` |
+| 底部电量格 | x=8, y=214, 119x10 | 12 个白色边框 cell，按电量分段填充 |
+
+### 4.3 摇杆面板
+
+- 红点表示当前 JoyC X/Y 位置，默认直径为 8px。
+- 十字线表示摇杆中心参考。
+- 摇杆处于中心死区时红点回到中心。
+- 摇杆按下时红点放大为 16px 直径，状态行不显示 click 文案。
+- 当 joystick 功能关闭时，红点颜色变为深灰，表示当前不发送鼠标移动。
+
+### 4.4 IMU 面板
+
+- 3D cube 根据内置 IMU 加速度估算 pitch/roll 后实时旋转。
+- 白色线表示 cube 边缘。
+- 青色线表示正面交叉辅助线。
+- IMU 姿态展示在 Magic 页面内持续更新，不依赖摇杆或 mic 当前是否开启。
+
+### 4.5 音频面板
+
+- 频谱柱显示内置 mic 当前采集到的能量分布。
+- mic 功能关闭时，频谱会逐步回落或显示近似静音状态。
+- mic 功能开启时，频谱根据采样数据实时变化，同时真实 PCM 进入 HFP 上行音频链路。
+
+### 4.6 状态行
+
+| 行 | 示例 | 含义 |
+| --- | --- | --- |
+| 1 | `J:ON M:OFF` | Joystick 功能状态、Mic 采集状态 |
+
+### 4.7 电量格
+
+- 电量格位于屏幕下方但不贴底，采用 Option C: 12 cells, compact。
+- 每个 cell 都有白色边框，整体尺寸为 `x=8, y=214, 119x10`。
+- 电量 `>=60%` 时已填充 cell 使用绿色。
+- 电量 `20%-59%` 时已填充 cell 使用黄色。
+- 电量 `<20%` 时已填充 cell 使用黑色，因此在黑底上看起来接近空格，只保留白色边框。
+
+## 5. Magic 内部功能状态
+
+Magic 页面内有两种互斥功能状态，由 BtnA 切换。
+
+### 5.1 Mic off / Joystick on
+
+这是进入 Magic 时的默认工作状态。
+
+硬件状态:
+
+- JoyC I2C 打开。
+- 内置 mic 硬件采集关闭。
+- HID mouse 保持连接并发送鼠标 report。
+- HFP 控制链路保留。
+- HFP audio channel 可以保持打开，但发送静音或不采集真实 mic。
+
+用户体验:
+
+- 摇杆控制电脑鼠标移动。
+- 摇杆点击等于鼠标左键点击。
+- 屏幕仍显示 IMU cube。
+- 音频区域显示静音或低电平。
+
+### 5.2 Mic on / Joystick off
+
+按 BtnA 后进入 mic 工作状态。
+
+硬件状态:
+
+- JoyC I2C 关闭并释放 PortA 共享引脚。
+- 内置 PDM mic 打开。
+- HID mouse profile 保持连接，但不发送鼠标移动。
+- HFP 控制链路保留。
+- HFP audio channel 保持或请求打开，并发送真实 PCM。
+
+用户体验:
+
+- 电脑侧仍看到同一个蓝牙设备。
+- 系统 mic 输入来自 Magic Stick。
+- 屏幕频谱随声音变化。
+- 摇杆面板仍展示 UI，但不会控制鼠标。
+
+## 6. 页面流程
+
+### 6.1 开机
+
+```mermaid
+flowchart TD
+    A["Power on"] --> B["Initialize M5, IMU, JoyC, LVGL"]
+    B --> C["Initialize Classic BT HID + HFP"]
+    C --> D["Show Setup"]
+```
+
+### 6.2 Setup 与 Magic 切换
+
+```mermaid
+flowchart TD
+    A["Setup"] -->|"BtnB short press"| B["Magic"]
+    B -->|"BtnB short press"| A
+```
+
+### 6.3 Magic 功能切换
+
+```mermaid
+flowchart TD
+    A["Magic: Mic off / Joystick on"] -->|"BtnA short press"| B["Stop JoyC I2C"]
+    B --> C["Start internal mic"]
+    C --> D["Magic: Mic on / Joystick off"]
+    D -->|"BtnA short press"| E["Stop internal mic"]
+    E --> F["Recover JoyC I2C"]
+    F --> A
+```
+
+### 6.4 维护操作
+
+```mermaid
+flowchart TD
+    A["Any page"] -->|"BtnB hold 3s"| B["Enter pairing/discoverable"]
+    A -->|"BtnB hold 8s"| C["Clear bonds"]
+    C --> D["Restart"]
+```
+
+## 7. 蓝牙行为
+
+蓝牙栈保持 Classic BT 同一设备名和同一地址，用户侧目标是只配对一次。
+
+| 功能 | 行为 |
+| --- | --- |
+| HID mouse | 在 Magic 的 joystick 状态下发送鼠标移动和点击 |
+| HFP control | 保持 HFP 控制链路，电脑侧可识别 mic 能力 |
+| HFP audio | 尽量保持 audio channel，mic 关闭时发送静音，mic 开启时发送真实 PCM |
+| 配对 | BtnB 长按 3s 重新进入可发现状态 |
+| 清除绑定 | BtnB 长按 8s 清除 bonding 并重启 |
+
+## 8. Review Checklist
+
+### Setup
+
+- 标题是否清楚表达这是维护页。
+- `Name: Magic Stick` 是否和电脑蓝牙设备名一致。
+- 底部是否只显示 `Discoverable`、`Pairing` 或 `Paired`。
+- 底部没有旧跳转提示。
+- 蓝牙状态、电量在 135x240 屏幕内不裁切。
+
+### Magic
+
+- 顶部无标题后，页面是否更像工作台而不是菜单页。
+- 底部电量格是否易读，绿色/黄色/黑色三档是否符合预期。
+- 摇杆点是否易读，joystick 关闭时的灰色状态是否明显。
+- IMU cube 是否大小合适、不会被状态行挤压。
+- 频谱区域是否能看出 mic 是否有输入。
+
+### 交互
+
+- BtnB 是否足够符合“Setup 入口”的心智模型。
+- BtnA 在 Magic 内只切功能、不切页面是否自然。
+- 从 mic 状态返回 joystick 状态后，摇杆是否稳定恢复。
+- 从 joystick 状态进入 mic 状态后，电脑 mic 输入是否不中断。
+
+## 9. 当前结论
+
+当前 UI 已简化为两个页面:
+
+- `Setup`: 设备/连接维护页。
+- `Magic`: 摇杆、IMU、音频合并工作页。
+
+这版交互的重点是减少页面数量，把传感器展示和真实输入能力集中到 Magic 页面，同时用 BtnB 固定承担 Setup 入口，降低切换路径复杂度。

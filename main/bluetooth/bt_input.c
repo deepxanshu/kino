@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "bt_hid_mouse.h"
+#include "bt_pairing_status.h"
 #include "esp_bt.h"
 #include "esp_bt_device.h"
 #include "esp_bt_main.h"
@@ -51,6 +52,7 @@ typedef struct {
     bool hid_reconnect_attempted;
     bool hfp_reconnect_attempted;
     bool discoverable;
+    bool pairing_active;
     bool mic_enabled;
     bool hfp_audio_msbc;
     bool hfp_vrec_requested;
@@ -476,6 +478,7 @@ static void bt_input_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *
 {
     switch (event) {
     case ESP_BT_GAP_AUTH_CMPL_EVT:
+        s_state.pairing_active = false;
         if (param->auth_cmpl.stat == ESP_BT_STATUS_SUCCESS) {
             char bda[18] = {0};
             ESP_LOGI(TAG, "BT auth success: %s [%s]", param->auth_cmpl.device_name,
@@ -489,14 +492,17 @@ static void bt_input_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *
         }
         break;
     case ESP_BT_GAP_PIN_REQ_EVT: {
+        s_state.pairing_active = true;
         esp_bt_pin_code_t pin_code = {'0', '0', '0', '0'};
         esp_bt_gap_pin_reply(param->pin_req.bda, true, 4, pin_code);
         break;
     }
     case ESP_BT_GAP_CFM_REQ_EVT:
+        s_state.pairing_active = true;
         esp_bt_gap_ssp_confirm_reply(param->cfm_req.bda, true);
         break;
     case ESP_BT_GAP_KEY_NOTIF_EVT:
+        s_state.pairing_active = true;
         ESP_LOGI(TAG, "BT passkey: %06" PRIu32, param->key_notif.passkey);
         break;
     case ESP_BT_GAP_MODE_CHG_EVT:
@@ -690,6 +696,7 @@ static void bt_input_hfp_cb(esp_hf_client_cb_event_t event, esp_hf_client_cb_par
         }
         s_state.hfp_slc_connected = (param->conn_stat.state == ESP_HF_CLIENT_CONNECTION_STATE_SLC_CONNECTED);
         if (s_state.hfp_slc_connected) {
+            s_state.pairing_active = false;
             s_state.hfp_peer_features = param->conn_stat.peer_feat;
             esp_hf_client_volume_update(ESP_HF_VOLUME_CONTROL_TARGET_MIC, 15);
             if (s_state.mic_enabled) {
@@ -816,6 +823,7 @@ static void bt_input_hidd_cb(esp_hidd_cb_event_t event, esp_hidd_cb_param_t *par
             s_state.hid_connected = (param->open.conn_status == ESP_HIDD_CONN_STATE_CONNECTED);
             if (s_state.hid_connected) {
                 char bda[18] = {0};
+                s_state.pairing_active = false;
                 s_state.discoverable = false;
                 bt_input_update_scan_mode();
                 ESP_LOGI(TAG, "HID connected peer=%s",
@@ -1003,13 +1011,25 @@ const char *bt_input_audio_status_text(void)
     return "OFF";
 }
 
+const char *bt_input_pairing_status_text(void)
+{
+    bool paired_or_connected = s_state.hid_connected || s_state.hfp_slc_connected;
+    if (!paired_or_connected && s_state.bt_ready && esp_bt_gap_get_bond_device_num() > 0) {
+        paired_or_connected = true;
+    }
+
+    return bt_pairing_status_text(
+        bt_pairing_status_resolve(s_state.discoverable, s_state.pairing_active, paired_or_connected));
+}
+
 void bt_input_set_discoverable(bool discoverable)
 {
     s_state.discoverable = discoverable;
+    s_state.pairing_active = false;
     bt_input_update_scan_mode();
-    ESP_LOGI(TAG, "BT discoverable=%d hid_ready=%d hid_connected=%d hfp_ready=%d hfp_connected=%d",
-             s_state.discoverable, s_state.hid_ready, s_state.hid_connected, s_state.hfp_ready,
-             s_state.hfp_slc_connected);
+    ESP_LOGI(TAG, "BT discoverable=%d pairing=%d hid_ready=%d hid_connected=%d hfp_ready=%d hfp_connected=%d",
+             s_state.discoverable, s_state.pairing_active, s_state.hid_ready,
+             s_state.hid_connected, s_state.hfp_ready, s_state.hfp_slc_connected);
 }
 
 void bt_input_clear_bonds(void)
@@ -1028,6 +1048,7 @@ void bt_input_clear_bonds(void)
     if (dev_num <= 0) {
         ESP_LOGI(TAG, "clear bonds: no bonded BR/EDR device");
         s_state.discoverable = true;
+        s_state.pairing_active = false;
         bt_input_update_scan_mode();
         return;
     }
@@ -1057,6 +1078,7 @@ void bt_input_clear_bonds(void)
     free(dev_list);
 
     s_state.discoverable = true;
+    s_state.pairing_active = false;
     bt_input_update_scan_mode();
 }
 

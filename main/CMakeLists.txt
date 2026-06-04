@@ -1,6 +1,7 @@
 set(SOURCES
     app_state.c
     device_mode.c
+    bluetooth/bt_pairing_status.c
     bluetooth/bt_hid_mouse.c
     bluetooth/bt_input.c
     joystick/joyc_i2c_bridge.cpp
@@ -12,13 +13,11 @@ set(SOURCES
     mic/mic_handle.cpp
     ui/ui_running_screen.c
     ui/ui_setup_screen.c
-    ui/ui_imu_screen.c
-    ui/ui_mic_screen.c
     ui/ui_theme.c
     ui/ui.c
     ui/updown_img.c
     lvgl_port.cpp
-    StickC-JoyMic.cpp
+    Magic-Stick.cpp
 )
 
 idf_component_register(SRCS ${SOURCES}

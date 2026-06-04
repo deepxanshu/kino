@@ -20,7 +20,6 @@ bool joystick_is_ready(void);
 bool joystick_read_state(uint16_t *joyX, uint16_t *joyY, bool *pressed);
 void handle_setup_screen(void *pvParam);
 void handle_running_screen(void *pvParam);
-void handle_imu_screen(void *pvParam);
 
 #ifdef __cplusplus
 }

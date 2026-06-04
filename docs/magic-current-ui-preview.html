@@ -1,0 +1,1132 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Magic Stick Current UI Preview</title>
+  <style>
+    :root {
+      --screen-w: 135px;
+      --screen-h: 240px;
+      --bg: #000;
+      --fg: #fff;
+      --grid: #404040;
+      --red: #ff2c2c;
+      --cyan: #00ffff;
+      --green: #18c74f;
+      --yellow: #ffd21f;
+      --panel: #242424;
+      --muted: #bdbdbd;
+      --retro-bg: #030403;
+      --retro-ink: #f2e8c6;
+      --retro-dim: #514a33;
+      --retro-amber: #d9a441;
+      --retro-green: #23d46b;
+      --retro-cyan: #38d8dd;
+      --retro-red: #ff4a3f;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #151515;
+      color: #eee;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      padding: 24px;
+    }
+
+    h1,
+    h2,
+    p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: 22px;
+      line-height: 1.2;
+      font-weight: 680;
+    }
+
+    h2 {
+      font-size: 15px;
+      line-height: 1.25;
+      font-weight: 650;
+    }
+
+    p,
+    li,
+    td,
+    th {
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+
+    code {
+      color: #fff;
+      background: #282828;
+      border: 1px solid #3a3a3a;
+      border-radius: 4px;
+      padding: 1px 4px;
+    }
+
+    .page {
+      max-width: 1160px;
+      margin: 0 auto;
+      display: grid;
+      gap: 18px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 460px minmax(320px, 1fr);
+      gap: 22px;
+      align-items: start;
+    }
+
+    .device-shell {
+      width: 437px;
+      height: 752px;
+      padding: 16px;
+      border-radius: 18px;
+      background: #252525;
+      box-shadow: 0 18px 54px rgba(0, 0, 0, 0.45);
+    }
+
+    .screen {
+      position: relative;
+      width: var(--screen-w);
+      height: var(--screen-h);
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--fg);
+      border: 1px solid #303030;
+      transform: scale(3);
+      transform-origin: top left;
+      image-rendering: pixelated;
+      font-family: "Montserrat", Arial, sans-serif;
+    }
+
+    .screen[data-design="scope"] {
+      --magic-border: var(--retro-amber);
+      --magic-ink: var(--retro-ink);
+      --magic-dim: var(--retro-dim);
+      --magic-accent: var(--retro-green);
+      --magic-cube: var(--retro-cyan);
+      --magic-red: var(--retro-red);
+      --magic-panel-bg: #020302;
+      --magic-panel-size: 56px;
+      --magic-control-h: 28px;
+      --magic-stack-gap: 7px;
+      --magic-joy-x: 7px;
+      --magic-joy-y: 9px;
+      --magic-imu-x: 72px;
+      --magic-imu-y: 9px;
+      --magic-mic-x: 7px;
+      --magic-mic-y: calc(var(--magic-joy-y) + var(--magic-panel-size) + var(--magic-stack-gap));
+      --magic-mic-size: var(--magic-control-h);
+      --magic-audio-x: 43px;
+      --magic-audio-y: calc(var(--magic-joy-y) + var(--magic-panel-size) + var(--magic-stack-gap));
+      --magic-audio-w: 86px;
+      --magic-audio-h: var(--magic-control-h);
+      --magic-bat-x: 11px;
+      --magic-bat-y: 211px;
+      --magic-bat-w: 113px;
+      --magic-bat-h: 12px;
+    }
+
+    .screen[data-design="deck"] {
+      --magic-border: #f0e1af;
+      --magic-ink: #f0e1af;
+      --magic-dim: #5c533a;
+      --magic-accent: #56e072;
+      --magic-cube: #9fe6dc;
+      --magic-red: #ff5b46;
+      --magic-panel-bg: #050505;
+      --magic-panel-size: 54px;
+      --magic-control-h: 27px;
+      --magic-stack-gap: 7px;
+      --magic-joy-x: 9px;
+      --magic-joy-y: 12px;
+      --magic-imu-x: 72px;
+      --magic-imu-y: 12px;
+      --magic-mic-x: 7px;
+      --magic-mic-y: calc(var(--magic-joy-y) + var(--magic-panel-size) + var(--magic-stack-gap));
+      --magic-mic-size: var(--magic-control-h);
+      --magic-audio-x: 43px;
+      --magic-audio-y: calc(var(--magic-joy-y) + var(--magic-panel-size) + var(--magic-stack-gap));
+      --magic-audio-w: 86px;
+      --magic-audio-h: var(--magic-control-h);
+      --magic-bat-x: 14px;
+      --magic-bat-y: 211px;
+      --magic-bat-w: 107px;
+      --magic-bat-h: 11px;
+    }
+
+    .screen[data-design="terminal"] {
+      --magic-border: #48c874;
+      --magic-ink: #bfffd0;
+      --magic-dim: #23472d;
+      --magic-accent: #48c874;
+      --magic-cube: #70ffdc;
+      --magic-red: #ff4d4d;
+      --magic-panel-bg: #010601;
+      --magic-panel-size: 55px;
+      --magic-control-h: 27.5px;
+      --magic-stack-gap: 7px;
+      --magic-joy-x: 7px;
+      --magic-joy-y: 10px;
+      --magic-imu-x: 73px;
+      --magic-imu-y: 10px;
+      --magic-mic-x: 7px;
+      --magic-mic-y: calc(var(--magic-joy-y) + var(--magic-panel-size) + var(--magic-stack-gap));
+      --magic-mic-size: var(--magic-control-h);
+      --magic-audio-x: 43px;
+      --magic-audio-y: calc(var(--magic-joy-y) + var(--magic-panel-size) + var(--magic-stack-gap));
+      --magic-audio-w: 86px;
+      --magic-audio-h: var(--magic-control-h);
+      --magic-bat-x: 10px;
+      --magic-bat-y: 211px;
+      --magic-bat-w: 115px;
+      --magic-bat-h: 12px;
+    }
+
+    .screen > .view {
+      position: absolute;
+      inset: 0;
+      display: none;
+    }
+
+    .screen[data-page="setup"] .setup-view,
+    .screen[data-page="magic"] .magic-view {
+      display: block;
+    }
+
+    .setup-title-retro,
+    .setup-line,
+    .setup-pair {
+      position: absolute;
+      color: var(--magic-ink);
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    .setup-title-retro {
+      left: 0;
+      top: 11px;
+      width: 135px;
+      text-align: center;
+      font-size: 14px;
+      line-height: 16px;
+      font-weight: 700;
+    }
+
+    .setup-line {
+      left: 9px;
+      width: 117px;
+      height: 18px;
+      padding: 0;
+      border-bottom: 1px solid color-mix(in srgb, var(--magic-border), transparent 30%);
+      background: transparent;
+      font-size: 10px;
+      line-height: 16px;
+    }
+
+    .setup-name {
+      top: 42px;
+      color: var(--magic-accent);
+    }
+
+    .setup-mouse {
+      top: 67px;
+    }
+
+    .setup-hfp {
+      top: 91px;
+    }
+
+    .setup-hfp-chan {
+      top: 115px;
+    }
+
+    .setup-bat {
+      top: 139px;
+    }
+
+    .setup-pair {
+      left: 19px;
+      top: 196px;
+      width: 97px;
+      height: 20px;
+      border: 1px solid color-mix(in srgb, var(--magic-border), transparent 18%);
+      color: var(--magic-accent);
+      background: var(--magic-panel-bg);
+      text-align: center;
+      font-size: 11px;
+      line-height: 18px;
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.65);
+    }
+
+    .mic-toggle {
+      position: absolute;
+      left: 6px;
+      top: 72px;
+      width: 44px;
+      height: 44px;
+      color: #707070;
+      border: 1px solid var(--fg);
+      background: var(--bg);
+      display: grid;
+      place-items: center;
+    }
+
+    .mic-toggle.is-on {
+      color: var(--green);
+    }
+
+    .mic-toggle svg {
+      width: 35px;
+      height: 35px;
+      display: block;
+    }
+
+    .panel {
+      position: absolute;
+      background: var(--bg);
+      border: 1px solid var(--fg);
+      overflow: hidden;
+    }
+
+    .joy {
+      left: 6px;
+      top: 8px;
+      width: 58px;
+      height: 58px;
+    }
+
+    .joy::before,
+    .joy::after {
+      content: "";
+      position: absolute;
+      background: var(--grid);
+    }
+
+    .joy::before {
+      left: 0;
+      top: 28px;
+      width: 58px;
+      height: 1px;
+    }
+
+    .joy::after {
+      left: 28px;
+      top: 0;
+      width: 1px;
+      height: 58px;
+    }
+
+    .joy-dot {
+      position: absolute;
+      width: var(--dot-size, 8px);
+      height: var(--dot-size, 8px);
+      left: calc(var(--dot-x, 29px) - var(--dot-size, 8px) / 2);
+      top: calc(var(--dot-y, 29px) - var(--dot-size, 8px) / 2);
+      border-radius: 50%;
+      background: var(--dot-color, var(--red));
+    }
+
+    .imu {
+      left: 71px;
+      top: 8px;
+      width: 58px;
+      height: 58px;
+    }
+
+    .cube-line {
+      position: absolute;
+      height: 2px;
+      background: var(--fg);
+      transform-origin: left center;
+    }
+
+    .cube-line.thin {
+      height: 1px;
+      background: var(--cyan);
+    }
+
+    .cube-line.l1 { left: 15px; top: 19px; width: 26px; transform: rotate(12deg); }
+    .cube-line.l2 { left: 41px; top: 24px; width: 17px; transform: rotate(72deg); }
+    .cube-line.l3 { left: 19px; top: 44px; width: 28px; transform: rotate(-9deg); }
+    .cube-line.l4 { left: 14px; top: 20px; width: 25px; transform: rotate(82deg); }
+    .cube-line.l5 { left: 23px; top: 13px; width: 24px; transform: rotate(11deg); }
+    .cube-line.l6 { left: 47px; top: 18px; width: 15px; transform: rotate(71deg); }
+    .cube-line.l7 { left: 28px; top: 38px; width: 24px; transform: rotate(-8deg); }
+    .cube-line.l8 { left: 23px; top: 14px; width: 25px; transform: rotate(81deg); }
+    .cube-line.l9 { left: 15px; top: 19px; width: 11px; transform: rotate(-37deg); }
+    .cube-line.l10 { left: 41px; top: 24px; width: 10px; transform: rotate(-38deg); }
+    .cube-line.l11 { left: 19px; top: 44px; width: 10px; transform: rotate(-40deg); }
+    .cube-line.l12 { left: 45px; top: 41px; width: 10px; transform: rotate(-38deg); }
+    .cube-line.c1 { left: 15px; top: 19px; width: 31px; transform: rotate(43deg); }
+    .cube-line.c2 { left: 41px; top: 24px; width: 30px; transform: rotate(134deg); }
+
+    .audio {
+      left: 54px;
+      top: 72px;
+      width: 75px;
+      height: 44px;
+    }
+
+    .audio::before,
+    .audio::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      width: 100%;
+      height: 1px;
+      background: var(--grid);
+    }
+
+    .audio::before { top: 14px; }
+    .audio::after { top: 28px; }
+
+    .bar {
+      position: absolute;
+      bottom: 3px;
+      width: 4px;
+      background: var(--fg);
+    }
+
+    .battery {
+      position: absolute;
+      left: 8px;
+      top: 214px;
+      width: 119px;
+      height: 10px;
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 1px;
+    }
+
+    .cell {
+      background: var(--bg);
+      border: 1px solid var(--fg);
+    }
+
+    .screen[data-page="setup"] {
+      background: var(--retro-bg);
+      border-color: #2e281b;
+    }
+
+    .screen[data-page="setup"] .setup-view {
+      background: var(--retro-bg);
+    }
+
+    .screen[data-page="magic"] {
+      background: var(--retro-bg);
+      border-color: #2e281b;
+    }
+
+    .screen[data-page="magic"] .magic-view {
+      background: var(--retro-bg);
+    }
+
+    .screen[data-page="magic"] .panel {
+      background: var(--magic-panel-bg);
+      border-color: var(--magic-border);
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.65);
+    }
+
+    .screen[data-page="magic"] .joy {
+      left: var(--magic-joy-x);
+      top: var(--magic-joy-y);
+      width: var(--magic-panel-size);
+      height: var(--magic-panel-size);
+    }
+
+    .screen[data-page="magic"] .joy::before {
+      left: 4px;
+      right: 4px;
+      top: calc(50% - 1px);
+      width: auto;
+      background: var(--magic-dim);
+    }
+
+    .screen[data-page="magic"] .joy::after {
+      top: 4px;
+      bottom: 4px;
+      left: calc(50% - 1px);
+      height: auto;
+      background: var(--magic-dim);
+    }
+
+    .screen[data-page="magic"] .joy-dot {
+      background: var(--dot-color, var(--magic-red));
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.75);
+    }
+
+    .screen[data-page="magic"] .imu {
+      left: var(--magic-imu-x);
+      top: var(--magic-imu-y);
+      width: var(--magic-panel-size);
+      height: var(--magic-panel-size);
+    }
+
+    .screen[data-page="magic"] .cube-line {
+      background: var(--magic-ink);
+    }
+
+    .screen[data-page="magic"] .cube-line.thin {
+      background: var(--magic-cube);
+    }
+
+    .screen[data-page="magic"] .mic-toggle {
+      left: var(--magic-mic-x);
+      top: var(--magic-mic-y);
+      width: var(--magic-mic-size);
+      height: var(--magic-mic-size);
+      color: var(--magic-dim);
+      border-color: var(--magic-border);
+      background: var(--magic-panel-bg);
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.65);
+    }
+
+    .screen[data-page="magic"] .mic-toggle.is-on {
+      color: var(--magic-accent);
+    }
+
+    .screen[data-page="magic"] .mic-toggle svg {
+      width: calc(var(--magic-mic-size) * 0.70);
+      height: calc(var(--magic-mic-size) * 0.70);
+    }
+
+    .screen[data-page="magic"] .audio {
+      left: var(--magic-audio-x);
+      top: var(--magic-audio-y);
+      width: var(--magic-audio-w);
+      height: var(--magic-audio-h);
+      border-color: var(--magic-border);
+      background: var(--magic-panel-bg);
+    }
+
+    .screen[data-page="magic"] .audio::before,
+    .screen[data-page="magic"] .audio::after {
+      background: var(--magic-dim);
+    }
+
+    .screen[data-page="magic"] .audio::before {
+      top: 9px;
+    }
+
+    .screen[data-page="magic"] .audio::after {
+      top: 18px;
+    }
+
+    .screen[data-page="magic"] .bar {
+      background: var(--magic-accent);
+    }
+
+    .screen[data-page="magic"] .battery {
+      left: var(--magic-bat-x);
+      top: var(--magic-bat-y);
+      width: var(--magic-bat-w);
+      height: var(--magic-bat-h);
+      gap: 2px;
+    }
+
+    .screen[data-page="magic"] .cell {
+      border-color: var(--magic-ink);
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.55);
+    }
+
+    .screen[data-design="deck"] .magic-view {
+      background: var(--retro-bg);
+    }
+
+    .screen[data-design="deck"] .setup-view {
+      background: var(--retro-bg);
+    }
+
+    .screen[data-design="terminal"] .magic-view {
+      background: #010601;
+    }
+
+    .screen[data-design="terminal"] .setup-view {
+      background: #010601;
+    }
+
+    .design-choice {
+      display: grid;
+      gap: 8px;
+    }
+
+    .design-choice button {
+      min-width: 116px;
+    }
+
+    .card {
+      background: #202020;
+      border: 1px solid #333;
+      border-radius: 10px;
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .controls {
+      display: grid;
+      gap: 14px;
+    }
+
+    .group {
+      display: grid;
+      gap: 8px;
+    }
+
+    .buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .mic-state-preview {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .mic-state-preview svg {
+      width: 24px;
+      height: 24px;
+      display: block;
+    }
+
+    .mic-state-preview .off {
+      color: #707070;
+    }
+
+    .mic-state-preview .on {
+      color: var(--green);
+    }
+
+    button,
+    select,
+    input[type="range"] {
+      font: inherit;
+    }
+
+    button,
+    select {
+      appearance: none;
+      border: 1px solid #555;
+      background: #262626;
+      color: #fff;
+      border-radius: 8px;
+      padding: 8px 10px;
+      cursor: pointer;
+    }
+
+    button:hover,
+    button.active,
+    select:focus {
+      border-color: #fff;
+      background: #303030;
+      outline: none;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 110px 1fr;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .state-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .state {
+      border: 1px solid #333;
+      background: #191919;
+      border-radius: 8px;
+      padding: 8px;
+    }
+
+    .state b {
+      display: block;
+      color: #fff;
+      font-size: 13px;
+      line-height: 1.2;
+      margin-bottom: 3px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border: 1px solid #333;
+      border-radius: 8px;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid #333;
+      padding: 7px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: #fff;
+      font-weight: 650;
+      background: #242424;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    @media (max-width: 900px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="card">
+      <h1>Magic Stick 复古简约 UI 预览</h1>
+      <p>这个页面模拟当前固件 UI，并统一 Setup / Magic 的复古简约视觉：黑底、复古仪表线框、紧凑状态行、mic 图标、频谱窗口和 12 格电量轨。</p>
+    </header>
+
+    <section class="layout">
+      <div class="device-shell">
+        <div class="screen" id="screen" data-page="setup" data-design="scope">
+          <section class="view setup-view">
+            <div class="setup-title-retro">Status</div>
+            <div class="setup-line setup-name">Magic Stick</div>
+            <div class="setup-line setup-mouse" id="setupMouse">Mouse: OK</div>
+            <div class="setup-line setup-hfp" id="setupHfp">HFP: SLC</div>
+            <div class="setup-line setup-hfp-chan" id="setupHfpChan">HFP Chan: OFF</div>
+            <div class="setup-line setup-bat" id="setupBat">Battery: 80%</div>
+            <div class="setup-pair" id="setupPair">Paired</div>
+          </section>
+
+          <section class="view magic-view">
+            <div class="panel joy">
+              <div class="joy-dot" id="joyDot"></div>
+            </div>
+            <div class="panel imu">
+              <div class="cube-line l1"></div><div class="cube-line l2"></div><div class="cube-line l3"></div><div class="cube-line l4"></div>
+              <div class="cube-line l5"></div><div class="cube-line l6"></div><div class="cube-line l7"></div><div class="cube-line l8"></div>
+              <div class="cube-line l9"></div><div class="cube-line l10"></div><div class="cube-line l11"></div><div class="cube-line l12"></div>
+              <div class="cube-line thin c1"></div><div class="cube-line thin c2"></div>
+            </div>
+            <div class="panel audio" id="audioBars"></div>
+            <div class="mic-toggle" id="magicMicIcon" aria-label="Mic off">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 14c1.7 0 3-1.3 3-3V6c0-1.7-1.3-3-3-3S9 4.3 9 6v5c0 1.7 1.3 3 3 3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M6 10v1c0 3.3 2.7 6 6 6s6-2.7 6-6v-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M12 17v4M9 21h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div class="battery" id="batteryCells"></div>
+          </section>
+        </div>
+      </div>
+
+      <div class="controls">
+        <section class="card">
+          <h2>按键交互</h2>
+          <div class="buttons">
+            <button id="btnB">BtnB 短按：Setup / Magic</button>
+            <button id="btnA">BtnA 短按：Mic / Joystick</button>
+            <button id="btnPair">BtnB 长按 3s：Pairing</button>
+            <button id="btnClear">BtnB 长按 8s：Clear Bonds</button>
+          </div>
+          <p id="hint">当前在 Setup。BtnA 在 Setup 无功能；BtnB 进入 Magic。</p>
+        </section>
+
+        <section class="card design-choice">
+          <h2>Magic 风格</h2>
+          <div class="buttons">
+            <button data-design="scope" class="active">Retro Scope</button>
+            <button data-design="deck">Pocket Deck</button>
+            <button data-design="terminal">Green CRT</button>
+          </div>
+          <p id="designHint">Retro Scope：推荐方案，像一块小型复古示波仪，暖白线框 + 绿色频谱，最接近“简约但有产品感”。</p>
+        </section>
+
+        <section class="card">
+          <h2>页面状态</h2>
+          <div class="state-grid">
+            <div class="state"><b>Page</b><span id="statePage">Setup</span></div>
+            <div class="state"><b>Magic Function</b><span id="stateFunction">Mic off / Joystick on</span></div>
+            <div class="state"><b>Magic Style</b><span id="stateDesign">Retro Scope</span></div>
+            <div class="state"><b>Mouse</b><span id="stateMouse">OK</span></div>
+            <div class="state"><b>HFP</b><span id="stateHfp">SLC</span></div>
+            <div class="state"><b>HFP Chan</b><span id="stateChan">OFF</span></div>
+            <div class="state"><b>Pairing</b><span id="statePair">Paired</span></div>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>状态控制</h2>
+          <div class="group">
+            <label class="row">
+              <span>Mouse</span>
+              <select id="mouseSelect">
+                <option selected>OK</option>
+                <option>WAIT</option>
+                <option>INIT</option>
+                <option>PAIR</option>
+              </select>
+            </label>
+            <label class="row">
+              <span>HFP</span>
+              <select id="hfpSelect">
+                <option selected>SLC</option>
+                <option>WAIT</option>
+                <option>INIT</option>
+                <option>PAIR</option>
+              </select>
+            </label>
+            <label class="row">
+              <span>HFP Chan</span>
+              <select id="chanSelect">
+                <option>ON</option>
+                <option selected>OFF</option>
+              </select>
+            </label>
+            <label class="row">
+              <span>Pairing</span>
+              <select id="pairSelect">
+                <option>Discoverable</option>
+                <option>Pairing</option>
+                <option selected>Paired</option>
+              </select>
+            </label>
+            <label class="row">
+              <span>Battery</span>
+              <input id="batteryRange" type="range" min="0" max="100" value="80">
+            </label>
+          </div>
+          <div class="buttons">
+            <button data-battery="80">80% green</button>
+            <button data-battery="45">45% yellow</button>
+            <button data-battery="15">15% black</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>Magic 交互细节</h2>
+          <div class="buttons">
+            <button id="joyMove">摇杆移动</button>
+            <button id="joyPress">摇杆按下 / 松开</button>
+            <button id="audioPulse">模拟声音输入</button>
+          </div>
+          <p>Joystick on 时红点为红色并可控制鼠标；按下时红点变大。Mic on 时红点变灰，频谱随输入变化。</p>
+        </section>
+
+        <section class="card">
+          <h2>Mic 图标状态</h2>
+          <div class="mic-state-preview">
+            <span class="off" title="Mic off">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 14c1.7 0 3-1.3 3-3V6c0-1.7-1.3-3-3-3S9 4.3 9 6v5c0 1.7 1.3 3 3 3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M6 10v1c0 3.3 2.7 6 6 6s6-2.7 6-6v-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M12 17v4M9 21h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </span>
+            <span class="on" title="Mic on">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 14c1.7 0 3-1.3 3-3V6c0-1.7-1.3-3-3-3S9 4.3 9 6v5c0 1.7 1.3 3 3 3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M6 10v1c0 3.3 2.7 6 6 6s6-2.7 6-6v-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M12 17v4M9 21h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </span>
+          </div>
+          <p>Magic 页面只显示一个 mic 图标：关闭时灰色，开启时绿色。BtnA 切换时颜色同步变化。</p>
+        </section>
+
+        <section class="card">
+          <h2>交互流程</h2>
+          <table>
+            <thead>
+              <tr><th>操作</th><th>行为</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>BtnB 短按</td><td>Setup 与 Magic 相互切换。</td></tr>
+              <tr><td>BtnA 短按</td><td>仅 Magic 生效：<code>Mic off / Joystick on</code> 与 <code>Mic on / Joystick off</code> 互切。</td></tr>
+              <tr><td>BtnB 长按 3s</td><td>进入可发现/配对状态，底部状态变为 <code>Pairing</code>。</td></tr>
+              <tr><td>BtnB 长按 8s</td><td>清除 bonding 并模拟重启回 Setup。</td></tr>
+              <tr><td>HFP Chan</td><td>Setup 上显示实际 HFP audio channel：<code>HFP Chan: ON/OFF</code>。</td></tr>
+            </tbody>
+          </table>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const state = {
+      page: 'setup',
+      micOn: false,
+      joyPressed: false,
+      joyX: 29,
+      joyY: 29,
+      battery: 80,
+      design: 'scope',
+      mouse: 'OK',
+      hfp: 'SLC',
+      chan: 'OFF',
+      pair: 'Paired',
+      audioPulse: false
+    };
+
+    const els = {
+      screen: document.getElementById('screen'),
+      setupMouse: document.getElementById('setupMouse'),
+      setupHfp: document.getElementById('setupHfp'),
+      setupHfpChan: document.getElementById('setupHfpChan'),
+      setupBat: document.getElementById('setupBat'),
+      setupPair: document.getElementById('setupPair'),
+      magicMicIcon: document.getElementById('magicMicIcon'),
+      joyDot: document.getElementById('joyDot'),
+      audioBars: document.getElementById('audioBars'),
+      batteryCells: document.getElementById('batteryCells'),
+      hint: document.getElementById('hint'),
+      statePage: document.getElementById('statePage'),
+      stateFunction: document.getElementById('stateFunction'),
+      stateDesign: document.getElementById('stateDesign'),
+      stateMouse: document.getElementById('stateMouse'),
+      stateHfp: document.getElementById('stateHfp'),
+      stateChan: document.getElementById('stateChan'),
+      statePair: document.getElementById('statePair'),
+      mouseSelect: document.getElementById('mouseSelect'),
+      hfpSelect: document.getElementById('hfpSelect'),
+      chanSelect: document.getElementById('chanSelect'),
+      pairSelect: document.getElementById('pairSelect'),
+      batteryRange: document.getElementById('batteryRange'),
+      designHint: document.getElementById('designHint')
+    };
+
+    const spectrumIdle = [2, 3, 2, 4, 5, 4, 3, 2, 3, 2, 2, 3];
+    const designLabels = {
+      scope: 'Retro Scope',
+      deck: 'Pocket Deck',
+      terminal: 'Green CRT'
+    };
+    const designHints = {
+      scope: 'Retro Scope：推荐方案，像一块小型复古示波仪，暖白线框 + 绿色频谱，最接近“简约但有产品感”。',
+      deck: 'Pocket Deck：更像老式便携录音机/仪表面板，音频窗口更高，整体更稳重。',
+      terminal: 'Green CRT：单色终端风，绿色线框和扫描线更强，信息最克制也最硬朗。'
+    };
+    let tick = 0;
+
+    function colorForBattery(value) {
+      if (value >= 60) return 'var(--green)';
+      if (value >= 20) return 'var(--yellow)';
+      return '#000';
+    }
+
+    function buildBars() {
+      els.audioBars.innerHTML = '';
+      for (let i = 0; i < 12; i += 1) {
+        const bar = document.createElement('div');
+        bar.className = 'bar';
+        els.audioBars.appendChild(bar);
+      }
+    }
+
+    function layoutBars(bars) {
+      const barWidth = 4;
+      const gap = 2;
+      const areaWidth = els.audioBars.clientWidth || 75;
+      const totalWidth = bars.length * barWidth + (bars.length - 1) * gap;
+      const startX = Math.max(2, Math.round((areaWidth - totalWidth) / 2));
+      bars.forEach((bar, i) => {
+        bar.style.width = `${barWidth}px`;
+        bar.style.left = `${startX + i * (barWidth + gap)}px`;
+      });
+    }
+
+    function buildBattery() {
+      els.batteryCells.innerHTML = '';
+      for (let i = 0; i < 12; i += 1) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        els.batteryCells.appendChild(cell);
+      }
+    }
+
+    function updateAudio() {
+      const bars = Array.from(els.audioBars.children);
+      const maxBarHeight = Math.max(4, (els.audioBars.clientHeight || 28) - 7);
+      layoutBars(bars);
+      bars.forEach((bar, i) => {
+        let height = spectrumIdle[i];
+        if (state.micOn || state.audioPulse) {
+          height = 3 + Math.round(Math.abs(Math.sin((tick + i) * 0.65)) * (maxBarHeight - 3));
+        }
+        height = Math.min(height, maxBarHeight);
+        bar.style.height = `${height}px`;
+      });
+      tick += 1;
+    }
+
+    function render() {
+      els.screen.dataset.page = state.page;
+      els.screen.dataset.design = state.design;
+
+      els.setupMouse.textContent = `Mouse: ${state.mouse}`;
+      els.setupHfp.textContent = `HFP: ${state.hfp}`;
+      els.setupHfpChan.textContent = `HFP Chan: ${state.chan}`;
+      els.setupBat.textContent = `Battery: ${state.battery}%`;
+      els.setupPair.textContent = state.pair;
+
+      const joystickOn = !state.micOn;
+      els.magicMicIcon.classList.toggle('is-on', state.micOn);
+      els.magicMicIcon.setAttribute('aria-label', state.micOn ? 'Mic on' : 'Mic off');
+      els.joyDot.style.setProperty('--dot-size', state.joyPressed ? '16px' : '8px');
+      els.joyDot.style.setProperty('--dot-x', `${state.joyX}px`);
+      els.joyDot.style.setProperty('--dot-y', `${state.joyY}px`);
+      els.joyDot.style.setProperty('--dot-color', joystickOn ? 'var(--magic-red)' : 'var(--magic-dim)');
+
+      const cells = Array.from(els.batteryCells.children);
+      const filledCells = Math.ceil((state.battery / 100) * cells.length);
+      const color = colorForBattery(state.battery);
+      cells.forEach((cell, i) => {
+        cell.style.background = i < filledCells ? color : 'var(--bg)';
+      });
+
+      els.statePage.textContent = state.page === 'setup' ? 'Setup' : 'Magic';
+      els.stateFunction.textContent = state.micOn ? 'Mic on / Joystick off' : 'Mic off / Joystick on';
+      els.stateDesign.textContent = designLabels[state.design];
+      els.stateMouse.textContent = state.mouse;
+      els.stateHfp.textContent = state.hfp;
+      els.stateChan.textContent = state.chan;
+      els.statePair.textContent = state.pair;
+      els.hint.textContent = state.page === 'setup'
+        ? '当前在 Setup。BtnA 在 Setup 无功能；BtnB 进入 Magic。'
+        : '当前在 Magic。BtnA 切换功能状态；BtnB 返回 Setup。';
+
+      els.mouseSelect.value = state.mouse;
+      els.hfpSelect.value = state.hfp;
+      els.chanSelect.value = state.chan;
+      els.pairSelect.value = state.pair;
+      els.batteryRange.value = state.battery;
+      els.designHint.textContent = designHints[state.design];
+      document.querySelectorAll('button[data-design]').forEach((button) => {
+        button.classList.toggle('active', button.dataset.design === state.design);
+      });
+      layoutBars(Array.from(els.audioBars.children));
+    }
+
+    document.getElementById('btnB').addEventListener('click', () => {
+      state.page = state.page === 'setup' ? 'magic' : 'setup';
+      state.joyPressed = false;
+      render();
+    });
+
+    document.getElementById('btnA').addEventListener('click', () => {
+      if (state.page !== 'magic') {
+        render();
+        return;
+      }
+      state.micOn = !state.micOn;
+      state.joyPressed = false;
+      if (state.micOn) {
+        state.chan = 'ON';
+      }
+      render();
+    });
+
+    document.getElementById('btnPair').addEventListener('click', () => {
+      state.pair = 'Pairing';
+      state.mouse = 'PAIR';
+      state.hfp = 'PAIR';
+      render();
+    });
+
+    document.getElementById('btnClear').addEventListener('click', () => {
+      state.page = 'setup';
+      state.pair = 'Discoverable';
+      state.mouse = 'INIT';
+      state.hfp = 'INIT';
+      state.chan = 'OFF';
+      state.micOn = false;
+      state.joyPressed = false;
+      render();
+    });
+
+    document.getElementById('joyMove').addEventListener('click', () => {
+      state.page = 'magic';
+      if (!state.micOn) {
+        state.joyX = state.joyX === 29 ? 44 : 29;
+        state.joyY = state.joyY === 29 ? 18 : 29;
+      }
+      render();
+    });
+
+    document.getElementById('joyPress').addEventListener('click', () => {
+      state.page = 'magic';
+      if (!state.micOn) {
+        state.joyPressed = !state.joyPressed;
+      }
+      render();
+    });
+
+    document.getElementById('audioPulse').addEventListener('click', () => {
+      state.audioPulse = !state.audioPulse;
+      render();
+    });
+
+    els.mouseSelect.addEventListener('change', () => {
+      state.mouse = els.mouseSelect.value;
+      render();
+    });
+    els.hfpSelect.addEventListener('change', () => {
+      state.hfp = els.hfpSelect.value;
+      render();
+    });
+    els.chanSelect.addEventListener('change', () => {
+      state.chan = els.chanSelect.value;
+      render();
+    });
+    els.pairSelect.addEventListener('change', () => {
+      state.pair = els.pairSelect.value;
+      render();
+    });
+    els.batteryRange.addEventListener('input', () => {
+      state.battery = Number(els.batteryRange.value);
+      render();
+    });
+    document.querySelectorAll('button[data-battery]').forEach((button) => {
+      button.addEventListener('click', () => {
+        state.battery = Number(button.dataset.battery);
+        render();
+      });
+    });
+    document.querySelectorAll('button[data-design]').forEach((button) => {
+      button.addEventListener('click', () => {
+        state.design = button.dataset.design;
+        state.page = 'magic';
+        render();
+      });
+    });
+    buildBars();
+    buildBattery();
+    render();
+    setInterval(() => {
+      updateAudio();
+    }, 120);
+  </script>
+</body>
+</html>

@@ -17,20 +17,31 @@ static lv_obj_t *running_screen   = NULL;
 static lv_obj_t *joystick_dot     = NULL;
 static lv_obj_t *joystick_area    = NULL;
 static lv_obj_t *cube_container   = NULL;
+static lv_obj_t *mic_icon_area    = NULL;
+static lv_obj_t *mic_icon_body    = NULL;
+static lv_obj_t *mic_icon_yoke    = NULL;
+static lv_obj_t *mic_icon_stem    = NULL;
+static lv_obj_t *mic_icon_base    = NULL;
 static lv_obj_t *audio_area       = NULL;
-static lv_obj_t *battery_label    = NULL;
-static lv_obj_t *mouse_info_label = NULL;
-static lv_obj_t *click_info_label = NULL;
-static lv_obj_t *joy_info_label   = NULL;
-static lv_obj_t *imu_info_label   = NULL;
+static lv_obj_t *battery_bar      = NULL;
 
-#define MOUSE_PANEL_SIZE 58
+#define MOUSE_PANEL_SIZE 56
 #define MOUSE_DOT_SIZE   8
-#define MAGIC_AUDIO_AREA_WIDTH  123
-#define MAGIC_AUDIO_AREA_HEIGHT 44
+#define MOUSE_DOT_PRESSED_SIZE (MOUSE_DOT_SIZE * 2)
+#define MAGIC_MIC_ICON_SIZE     28
+#define MAGIC_AUDIO_AREA_WIDTH  86
+#define MAGIC_AUDIO_AREA_HEIGHT 28
+#define MAGIC_AUDIO_VISIBLE_BARS 12
 #define MAGIC_AUDIO_BAR_WIDTH   4
 #define MAGIC_AUDIO_BAR_GAP     2
-#define MAGIC_AUDIO_BAR_BASE_Y  40
+#define MAGIC_AUDIO_BAR_BASE_Y  25
+#define MAGIC_AUDIO_BAR_MAX_DRAW_HEIGHT 21
+#define MAGIC_BATTERY_BAR_X     11
+#define MAGIC_BATTERY_BAR_Y     211
+#define MAGIC_BATTERY_BAR_WIDTH 113
+#define MAGIC_BATTERY_BAR_HEIGHT 12
+#define MAGIC_BATTERY_SEGMENTS   12
+#define MAGIC_BATTERY_SEGMENT_GAP 1
 
 typedef struct {
     float x;
@@ -45,13 +56,17 @@ typedef struct {
 
 static lv_obj_t *edge_lines[12];
 static lv_obj_t *cross_lines[2];
-static lv_obj_t *audio_bars[MIC_SPECTRUM_BANDS];
+static lv_obj_t *audio_bars[MAGIC_AUDIO_VISIBLE_BARS];
+static lv_obj_t *battery_segments[MAGIC_BATTERY_SEGMENTS];
 static lv_point_t edge_points[12][2];
 static lv_point_t cross_points[2][2];
-static uint8_t s_last_audio_bars[MIC_SPECTRUM_BANDS];
+static uint8_t s_last_audio_bars[MAGIC_AUDIO_VISIBLE_BARS];
 static lv_point_t s_audio_grid_points[2][2] = {
-    {{0, 14}, {MAGIC_AUDIO_AREA_WIDTH, 14}},
-    {{0, 28}, {MAGIC_AUDIO_AREA_WIDTH, 28}},
+    {{0, 9}, {MAGIC_AUDIO_AREA_WIDTH, 9}},
+    {{0, 18}, {MAGIC_AUDIO_AREA_WIDTH, 18}},
+};
+static lv_point_t s_mic_yoke_points[] = {
+    {7, 11}, {7, 13}, {9, 18}, {14, 20}, {19, 18}, {21, 13}, {21, 11},
 };
 
 static const point3d_t vertices[8] = {
@@ -64,9 +79,6 @@ static const int edges[12][2] = {
     {4, 5}, {5, 6}, {6, 7}, {7, 4},
     {0, 4}, {1, 5}, {2, 6}, {3, 7},
 };
-
-static float s_pitch = 0.0f;
-static float s_roll  = 0.0f;
 
 static int16_t map_range(int16_t value, int16_t in_min, int16_t in_max, int16_t out_min, int16_t out_max)
 {
@@ -84,16 +96,53 @@ static int16_t clamp_i16(int16_t value, int16_t min_value, int16_t max_value)
     return value;
 }
 
-static lv_obj_t *create_status_label(lv_obj_t *parent, const char *text, int16_t y)
+static void update_mic_icon(bool mic_running)
 {
-    lv_obj_t *label = lv_label_create(parent);
-    lv_label_set_text(label, text);
-    lv_label_set_long_mode(label, LV_LABEL_LONG_CLIP);
-    lv_obj_set_width(label, 120);
-    lv_obj_align(label, LV_ALIGN_TOP_LEFT, 8, y);
-    lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
-    ui_theme_apply_label(label);
-    return label;
+    lv_color_t color = mic_running ? ui_theme_accent_color() : ui_theme_grid_color();
+
+    if (mic_icon_body != NULL && lv_obj_is_valid(mic_icon_body)) {
+        lv_obj_set_style_border_color(mic_icon_body, color, LV_PART_MAIN);
+    }
+    if (mic_icon_yoke != NULL && lv_obj_is_valid(mic_icon_yoke)) {
+        lv_obj_set_style_line_color(mic_icon_yoke, color, LV_PART_MAIN);
+    }
+    if (mic_icon_stem != NULL && lv_obj_is_valid(mic_icon_stem)) {
+        lv_obj_set_style_bg_color(mic_icon_stem, color, LV_PART_MAIN);
+    }
+    if (mic_icon_base != NULL && lv_obj_is_valid(mic_icon_base)) {
+        lv_obj_set_style_bg_color(mic_icon_base, color, LV_PART_MAIN);
+    }
+}
+
+static lv_color_t battery_segment_color(uint8_t battery_percent)
+{
+    if (battery_percent >= 60) {
+        return ui_theme_accent_color();
+    }
+    if (battery_percent >= 20) {
+        return lv_color_make(255, 210, 31);
+    }
+    return ui_theme_bg_color();
+}
+
+static void update_battery_bar(uint8_t battery_percent)
+{
+    if (battery_bar == NULL || !lv_obj_is_valid(battery_bar)) {
+        return;
+    }
+
+    uint8_t percent = battery_percent > 100 ? 100 : battery_percent;
+    uint8_t filled_segments = (uint8_t)((percent * MAGIC_BATTERY_SEGMENTS + 99) / 100);
+    lv_color_t fill_color = battery_segment_color(percent);
+
+    for (int i = 0; i < MAGIC_BATTERY_SEGMENTS; ++i) {
+        if (battery_segments[i] == NULL || !lv_obj_is_valid(battery_segments[i])) {
+            continue;
+        }
+        lv_obj_set_style_bg_color(battery_segments[i],
+                                  i < filled_segments ? fill_color : ui_theme_bg_color(),
+                                  LV_PART_MAIN);
+    }
 }
 
 static void create_audio_grid_line(lv_obj_t *parent, int index)
@@ -106,14 +155,18 @@ static void create_audio_grid_line(lv_obj_t *parent, int index)
 
 static void update_magic_audio_bars(const mic_spectrum_data_t *spectrum)
 {
-    int16_t total_width = MIC_SPECTRUM_BANDS * MAGIC_AUDIO_BAR_WIDTH +
-                          (MIC_SPECTRUM_BANDS - 1) * MAGIC_AUDIO_BAR_GAP;
+    int16_t total_width = MAGIC_AUDIO_VISIBLE_BARS * MAGIC_AUDIO_BAR_WIDTH +
+                          (MAGIC_AUDIO_VISIBLE_BARS - 1) * MAGIC_AUDIO_BAR_GAP;
     int16_t start_x = (MAGIC_AUDIO_AREA_WIDTH - total_width) / 2;
 
-    for (int i = 0; i < MIC_SPECTRUM_BANDS; i++) {
+    for (int i = 0; i < MAGIC_AUDIO_VISIBLE_BARS; i++) {
         uint8_t target = 0;
         if (spectrum != NULL) {
-            target = spectrum->bars[i] > MAGIC_AUDIO_BAR_MAX_HEIGHT ? MAGIC_AUDIO_BAR_MAX_HEIGHT : spectrum->bars[i];
+            int source_index = (i * MIC_SPECTRUM_BANDS) / MAGIC_AUDIO_VISIBLE_BARS;
+            uint8_t raw = spectrum->bars[source_index] > MAGIC_AUDIO_BAR_MAX_HEIGHT ?
+                          MAGIC_AUDIO_BAR_MAX_HEIGHT : spectrum->bars[source_index];
+            target = (uint8_t)((raw * MAGIC_AUDIO_BAR_MAX_DRAW_HEIGHT + MAGIC_AUDIO_BAR_MAX_HEIGHT - 1) /
+                               MAGIC_AUDIO_BAR_MAX_HEIGHT);
         }
 
         uint8_t height = (uint8_t)((s_last_audio_bars[i] * 3 + target) / 4);
@@ -145,9 +198,6 @@ static void update_mouse_imu_cube(float ax, float ay, float az)
     if (az < 0.0f) {
         pitch = (float)M_PI - pitch;
     }
-    s_pitch = pitch;
-    s_roll  = roll;
-
     point2d_t projected[8];
     int center_x = lv_obj_get_width(cube_container) / 2;
     int center_y = lv_obj_get_height(cube_container) / 2;
@@ -209,15 +259,9 @@ void create_running_screen(void)
     lv_obj_clear_flag(running_screen, LV_OBJ_FLAG_SCROLLABLE);
     ui_theme_apply_screen(running_screen);
 
-    lv_obj_t *label = lv_label_create(running_screen);
-    lv_label_set_text(label, "Magic");
-    lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 6);
-    lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
-    ui_theme_apply_label(label);
-
     joystick_area = lv_obj_create(running_screen);
     lv_obj_set_size(joystick_area, MOUSE_PANEL_SIZE, MOUSE_PANEL_SIZE);
-    lv_obj_align(joystick_area, LV_ALIGN_TOP_LEFT, 6, 32);
+    lv_obj_align(joystick_area, LV_ALIGN_TOP_LEFT, 7, 9);
     lv_obj_set_style_border_width(joystick_area, 1, LV_PART_MAIN);
     ui_theme_apply_panel(joystick_area);
     lv_obj_set_style_pad_all(joystick_area, 0, LV_PART_MAIN);
@@ -238,13 +282,13 @@ void create_running_screen(void)
     joystick_dot = lv_obj_create(joystick_area);
     lv_obj_set_size(joystick_dot, MOUSE_DOT_SIZE, MOUSE_DOT_SIZE);
     lv_obj_set_style_radius(joystick_dot, LV_RADIUS_CIRCLE, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(joystick_dot, lv_palette_main(LV_PALETTE_RED), LV_PART_MAIN);
+    lv_obj_set_style_bg_color(joystick_dot, ui_theme_red_color(), LV_PART_MAIN);
     lv_obj_set_style_border_width(joystick_dot, 0, LV_PART_MAIN);
     lv_obj_align(joystick_dot, LV_ALIGN_CENTER, 0, 0);
 
     cube_container = lv_obj_create(running_screen);
     lv_obj_set_size(cube_container, MOUSE_PANEL_SIZE, MOUSE_PANEL_SIZE);
-    lv_obj_align(cube_container, LV_ALIGN_TOP_LEFT, 71, 32);
+    lv_obj_align(cube_container, LV_ALIGN_TOP_LEFT, 72, 9);
     ui_theme_apply_panel(cube_container);
     lv_obj_set_style_border_width(cube_container, 1, LV_PART_MAIN);
     lv_obj_set_style_pad_all(cube_container, 0, LV_PART_MAIN);
@@ -262,7 +306,7 @@ void create_running_screen(void)
     for (int i = 0; i < 2; ++i) {
         cross_lines[i] = lv_line_create(cube_container);
         lv_obj_set_style_line_width(cross_lines[i], 1, 0);
-        lv_obj_set_style_line_color(cross_lines[i], lv_color_make(0, 255, 255), 0);
+        lv_obj_set_style_line_color(cross_lines[i], ui_theme_cyan_color(), 0);
         lv_obj_add_flag(cross_lines[i], LV_OBJ_FLAG_FLOATING);
         static lv_point_t default_points[2] = {{0, 0}, {0, 0}};
         lv_line_set_points(cross_lines[i], default_points, 2);
@@ -270,22 +314,66 @@ void create_running_screen(void)
 
     audio_area = lv_obj_create(running_screen);
     lv_obj_set_size(audio_area, MAGIC_AUDIO_AREA_WIDTH, MAGIC_AUDIO_AREA_HEIGHT);
-    lv_obj_align(audio_area, LV_ALIGN_TOP_LEFT, 6, 96);
+    lv_obj_align(audio_area, LV_ALIGN_TOP_LEFT, 43, 72);
     ui_theme_apply_panel(audio_area);
     lv_obj_set_style_border_width(audio_area, 1, LV_PART_MAIN);
     lv_obj_set_style_pad_all(audio_area, 0, LV_PART_MAIN);
     lv_obj_clear_flag(audio_area, LV_OBJ_FLAG_SCROLLABLE);
 
+    mic_icon_area = lv_obj_create(running_screen);
+    lv_obj_set_size(mic_icon_area, MAGIC_MIC_ICON_SIZE, MAGIC_MIC_ICON_SIZE);
+    lv_obj_align(mic_icon_area, LV_ALIGN_TOP_LEFT, 7, 72);
+    ui_theme_apply_panel(mic_icon_area);
+    lv_obj_set_style_border_width(mic_icon_area, 1, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(mic_icon_area, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(mic_icon_area, LV_OBJ_FLAG_SCROLLABLE);
+
+    mic_icon_yoke = lv_line_create(mic_icon_area);
+    lv_obj_set_size(mic_icon_yoke, MAGIC_MIC_ICON_SIZE, MAGIC_MIC_ICON_SIZE);
+    lv_obj_align(mic_icon_yoke, LV_ALIGN_TOP_LEFT, 0, 0);
+    lv_line_set_points(mic_icon_yoke, s_mic_yoke_points,
+                       sizeof(s_mic_yoke_points) / sizeof(s_mic_yoke_points[0]));
+    lv_obj_set_style_line_width(mic_icon_yoke, 2, LV_PART_MAIN);
+    lv_obj_set_style_line_rounded(mic_icon_yoke, true, LV_PART_MAIN);
+
+    mic_icon_body = lv_obj_create(mic_icon_area);
+    lv_obj_set_size(mic_icon_body, 8, 12);
+    lv_obj_align(mic_icon_body, LV_ALIGN_TOP_MID, 0, 5);
+    lv_obj_set_style_bg_opa(mic_icon_body, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_width(mic_icon_body, 2, LV_PART_MAIN);
+    lv_obj_set_style_radius(mic_icon_body, 4, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(mic_icon_body, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(mic_icon_body, LV_OBJ_FLAG_SCROLLABLE);
+
+    mic_icon_stem = lv_obj_create(mic_icon_area);
+    lv_obj_set_size(mic_icon_stem, 2, 5);
+    lv_obj_align(mic_icon_stem, LV_ALIGN_TOP_MID, 0, 20);
+    lv_obj_set_style_bg_opa(mic_icon_stem, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_border_width(mic_icon_stem, 0, LV_PART_MAIN);
+    lv_obj_set_style_radius(mic_icon_stem, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(mic_icon_stem, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(mic_icon_stem, LV_OBJ_FLAG_SCROLLABLE);
+
+    mic_icon_base = lv_obj_create(mic_icon_area);
+    lv_obj_set_size(mic_icon_base, 9, 2);
+    lv_obj_align(mic_icon_base, LV_ALIGN_TOP_MID, 0, 24);
+    lv_obj_set_style_bg_opa(mic_icon_base, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_border_width(mic_icon_base, 0, LV_PART_MAIN);
+    lv_obj_set_style_radius(mic_icon_base, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(mic_icon_base, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(mic_icon_base, LV_OBJ_FLAG_SCROLLABLE);
+    update_mic_icon(false);
+
     create_audio_grid_line(audio_area, 0);
     create_audio_grid_line(audio_area, 1);
 
-    int16_t total_width = MIC_SPECTRUM_BANDS * MAGIC_AUDIO_BAR_WIDTH +
-                          (MIC_SPECTRUM_BANDS - 1) * MAGIC_AUDIO_BAR_GAP;
+    int16_t total_width = MAGIC_AUDIO_VISIBLE_BARS * MAGIC_AUDIO_BAR_WIDTH +
+                          (MAGIC_AUDIO_VISIBLE_BARS - 1) * MAGIC_AUDIO_BAR_GAP;
     int16_t start_x = (MAGIC_AUDIO_AREA_WIDTH - total_width) / 2;
-    for (int i = 0; i < MIC_SPECTRUM_BANDS; i++) {
+    for (int i = 0; i < MAGIC_AUDIO_VISIBLE_BARS; i++) {
         audio_bars[i] = lv_obj_create(audio_area);
         lv_obj_set_size(audio_bars[i], MAGIC_AUDIO_BAR_WIDTH, 1);
-        lv_obj_set_style_bg_color(audio_bars[i], ui_theme_fg_color(), LV_PART_MAIN);
+        lv_obj_set_style_bg_color(audio_bars[i], ui_theme_accent_color(), LV_PART_MAIN);
         lv_obj_set_style_border_width(audio_bars[i], 0, LV_PART_MAIN);
         lv_obj_set_style_radius(audio_bars[i], 0, LV_PART_MAIN);
         lv_obj_align(audio_bars[i], LV_ALIGN_TOP_LEFT, start_x + i * (MAGIC_AUDIO_BAR_WIDTH + MAGIC_AUDIO_BAR_GAP),
@@ -293,11 +381,33 @@ void create_running_screen(void)
         s_last_audio_bars[i] = 0;
     }
 
-    battery_label    = create_status_label(running_screen, "Magic B:--", 146);
-    mouse_info_label = create_status_label(running_screen, "J:ON M:OFF", 164);
-    click_info_label = create_status_label(running_screen, "HID:WAIT HFP:WAIT", 182);
-    joy_info_label   = create_status_label(running_screen, "Click:UP A:OFF", 200);
-    imu_info_label   = create_status_label(running_screen, "P:0 R:0 L:-90", 218);
+    battery_bar = lv_obj_create(running_screen);
+    lv_obj_set_size(battery_bar, MAGIC_BATTERY_BAR_WIDTH, MAGIC_BATTERY_BAR_HEIGHT);
+    lv_obj_align(battery_bar, LV_ALIGN_TOP_LEFT, MAGIC_BATTERY_BAR_X, MAGIC_BATTERY_BAR_Y);
+    lv_obj_set_style_bg_color(battery_bar, ui_theme_bg_color(), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(battery_bar, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_border_width(battery_bar, 0, LV_PART_MAIN);
+    lv_obj_set_style_radius(battery_bar, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(battery_bar, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(battery_bar, LV_OBJ_FLAG_SCROLLABLE);
+
+    int16_t segment_width = 8;
+    int16_t total_segment_width = MAGIC_BATTERY_SEGMENTS * segment_width +
+                                  (MAGIC_BATTERY_SEGMENTS - 1) * MAGIC_BATTERY_SEGMENT_GAP;
+    int16_t segment_start_x = (MAGIC_BATTERY_BAR_WIDTH - total_segment_width) / 2;
+    for (int i = 0; i < MAGIC_BATTERY_SEGMENTS; ++i) {
+        battery_segments[i] = lv_obj_create(battery_bar);
+        lv_obj_set_size(battery_segments[i], segment_width, MAGIC_BATTERY_BAR_HEIGHT);
+        lv_obj_align(battery_segments[i], LV_ALIGN_TOP_LEFT,
+                     segment_start_x + i * (segment_width + MAGIC_BATTERY_SEGMENT_GAP), 0);
+        lv_obj_set_style_bg_color(battery_segments[i], ui_theme_bg_color(), LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(battery_segments[i], LV_OPA_COVER, LV_PART_MAIN);
+        lv_obj_set_style_border_color(battery_segments[i], ui_theme_fg_color(), LV_PART_MAIN);
+        lv_obj_set_style_border_width(battery_segments[i], 1, LV_PART_MAIN);
+        lv_obj_set_style_radius(battery_segments[i], 0, LV_PART_MAIN);
+        lv_obj_set_style_pad_all(battery_segments[i], 0, LV_PART_MAIN);
+        lv_obj_clear_flag(battery_segments[i], LV_OBJ_FLAG_SCROLLABLE);
+    }
 
     lvgl_port_unlock();
 }
@@ -339,8 +449,9 @@ void update_running_screen(int16_t joyX, int16_t joyY, uint8_t bat, bool pressed
                            bool joystick_enabled, bool hfp_connected, bool audio_connected,
                            uint32_t sample_rate)
 {
-    int16_t min_pos = MOUSE_DOT_SIZE / 2;
-    int16_t max_pos = MOUSE_PANEL_SIZE - (MOUSE_DOT_SIZE / 2);
+    int16_t dot_size = pressed ? MOUSE_DOT_PRESSED_SIZE : MOUSE_DOT_SIZE;
+    int16_t min_pos = dot_size / 2;
+    int16_t max_pos = MOUSE_PANEL_SIZE - (dot_size / 2);
     int16_t x_pos   = map_range(joyX, X_MIN, X_MAX, min_pos, max_pos);
     int16_t y_pos   = map_range(joyY, Y_MIN, Y_MAX, max_pos, min_pos);
 
@@ -361,33 +472,26 @@ void update_running_screen(int16_t joyX, int16_t joyY, uint8_t bat, bool pressed
         vTaskDelay(pdMS_TO_TICKS(10));
     }
     if (running_screen == NULL || !lv_obj_is_valid(running_screen) ||
-        joystick_dot == NULL || battery_label == NULL || mouse_info_label == NULL ||
-        click_info_label == NULL || joy_info_label == NULL || imu_info_label == NULL ||
-        audio_area == NULL || !lv_obj_is_valid(audio_area)) {
+        joystick_dot == NULL || battery_bar == NULL ||
+        audio_area == NULL || !lv_obj_is_valid(audio_area) ||
+        mic_icon_area == NULL || !lv_obj_is_valid(mic_icon_area)) {
         lvgl_port_unlock();
         return;
     }
 
-    lv_obj_align(joystick_dot, LV_ALIGN_TOP_LEFT, x_pos - (MOUSE_DOT_SIZE / 2), y_pos - (MOUSE_DOT_SIZE / 2));
+    lv_obj_set_size(joystick_dot, dot_size, dot_size);
+    lv_obj_align(joystick_dot, LV_ALIGN_TOP_LEFT, x_pos - (dot_size / 2), y_pos - (dot_size / 2));
     lv_obj_set_style_bg_color(joystick_dot,
-                              joystick_enabled ? lv_palette_main(LV_PALETTE_RED) : ui_theme_grid_color(),
+                              joystick_enabled ? ui_theme_red_color() : ui_theme_grid_color(),
                               LV_PART_MAIN);
     update_mouse_imu_cube(accel_x, accel_y, accel_z);
+    update_mic_icon(mic_running);
     update_magic_audio_bars(mic_running ? spectrum : NULL);
+    update_battery_bar(bat);
 
-    int16_t pitch_deg = (int16_t)lroundf(s_pitch * 180.0f / (float)M_PI);
-    int16_t roll_deg  = (int16_t)lroundf(s_roll * 180.0f / (float)M_PI);
-    int spectrum_db = spectrum == NULL ? -90 : spectrum->db;
-
-    lv_label_set_text_fmt(battery_label, "Magic B:%u%%", (unsigned)bat);
-    lv_label_set_text_fmt(mouse_info_label, "J:%s M:%s", joystick_enabled ? "ON" : "OFF",
-                          mic_running ? "ON" : "OFF");
-    lv_label_set_text_fmt(click_info_label, "HID:%s HFP:%s", bt_connected ? "OK" : "WAIT",
-                          hfp_connected ? "SLC" : "WAIT");
-    lv_label_set_text_fmt(joy_info_label, "Click:%s A:%s", pressed ? "DOWN" : "UP",
-                          audio_connected ? "ON" : "OFF");
-    lv_label_set_text_fmt(imu_info_label, "P:%d R:%d L:%d", pitch_deg, roll_deg,
-                          mic_running ? spectrum_db : -90);
+    (void)bt_connected;
+    (void)hfp_connected;
+    (void)audio_connected;
     (void)sample_rate;
     lvgl_port_unlock();
 }
@@ -411,20 +515,24 @@ void ui_running_screen_destory(void)
     joystick_dot       = NULL;
     joystick_area      = NULL;
     cube_container     = NULL;
+    mic_icon_area      = NULL;
+    mic_icon_body      = NULL;
+    mic_icon_yoke      = NULL;
+    mic_icon_stem      = NULL;
+    mic_icon_base      = NULL;
     audio_area         = NULL;
-    battery_label      = NULL;
-    mouse_info_label   = NULL;
-    click_info_label   = NULL;
-    joy_info_label     = NULL;
-    imu_info_label     = NULL;
+    battery_bar        = NULL;
     for (int i = 0; i < 12; ++i) {
         edge_lines[i] = NULL;
     }
     for (int i = 0; i < 2; ++i) {
         cross_lines[i] = NULL;
     }
-    for (int i = 0; i < MIC_SPECTRUM_BANDS; i++) {
+    for (int i = 0; i < MAGIC_AUDIO_VISIBLE_BARS; i++) {
         audio_bars[i] = NULL;
         s_last_audio_bars[i] = 0;
+    }
+    for (int i = 0; i < MAGIC_BATTERY_SEGMENTS; i++) {
+        battery_segments[i] = NULL;
     }
 }

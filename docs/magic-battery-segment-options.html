@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Magic Stick Segmented Battery Options</title>
+  <style>
+    :root {
+      --screen-w: 135px;
+      --screen-h: 240px;
+      --bg: #000;
+      --fg: #fff;
+      --grid: #404040;
+      --red: #ff2c2c;
+      --cyan: #00ffff;
+      --green: #18c74f;
+      --yellow: #ffd21f;
+      --low: #000;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #151515;
+      color: #eee;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      padding: 26px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 22px;
+      line-height: 1.2;
+      font-weight: 650;
+    }
+
+    p {
+      margin: 0;
+      color: #bebebe;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .page {
+      display: grid;
+      gap: 22px;
+      max-width: 1180px;
+      margin: 0 auto;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    button {
+      appearance: none;
+      border: 1px solid #5b5b5b;
+      background: #242424;
+      color: #fff;
+      border-radius: 8px;
+      padding: 9px 12px;
+      text-align: left;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    button:hover,
+    button.active {
+      border-color: #fff;
+      background: #303030;
+    }
+
+    .options {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(230px, 1fr));
+      gap: 20px;
+      align-items: start;
+    }
+
+    .option {
+      display: grid;
+      gap: 12px;
+    }
+
+    .meta {
+      min-height: 78px;
+      display: grid;
+      gap: 4px;
+    }
+
+    .meta h2 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.2;
+    }
+
+    .meta p {
+      font-size: 13px;
+    }
+
+    .device {
+      width: calc(var(--screen-w) * 2.1);
+      height: calc(var(--screen-h) * 2.1);
+      padding: 12px;
+      border-radius: 16px;
+      background: #242424;
+      box-shadow: 0 16px 44px rgba(0, 0, 0, 0.4);
+    }
+
+    .screen {
+      position: relative;
+      width: var(--screen-w);
+      height: var(--screen-h);
+      background: var(--bg);
+      color: var(--fg);
+      overflow: hidden;
+      transform: scale(2.1);
+      transform-origin: top left;
+      image-rendering: pixelated;
+      border: 1px solid #303030;
+      font-family: "Montserrat", Arial, sans-serif;
+    }
+
+    .panel {
+      position: absolute;
+      border: 1px solid var(--fg);
+      background: var(--bg);
+      overflow: hidden;
+    }
+
+    .joy {
+      left: 6px;
+      top: 8px;
+      width: 58px;
+      height: 58px;
+    }
+
+    .joy::before,
+    .joy::after {
+      content: "";
+      position: absolute;
+      background: var(--grid);
+    }
+
+    .joy::before {
+      left: 0;
+      top: 28px;
+      width: 58px;
+      height: 1px;
+    }
+
+    .joy::after {
+      left: 28px;
+      top: 0;
+      width: 1px;
+      height: 58px;
+    }
+
+    .joy-dot {
+      position: absolute;
+      left: 34px;
+      top: 21px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--red);
+    }
+
+    .imu {
+      left: 71px;
+      top: 8px;
+      width: 58px;
+      height: 58px;
+    }
+
+    .cube-line {
+      position: absolute;
+      height: 2px;
+      background: var(--fg);
+      transform-origin: left center;
+    }
+
+    .cube-line.thin {
+      height: 1px;
+      background: var(--cyan);
+    }
+
+    .cube-line.l1 { left: 15px; top: 19px; width: 26px; transform: rotate(12deg); }
+    .cube-line.l2 { left: 41px; top: 24px; width: 17px; transform: rotate(72deg); }
+    .cube-line.l3 { left: 19px; top: 44px; width: 28px; transform: rotate(-9deg); }
+    .cube-line.l4 { left: 14px; top: 20px; width: 25px; transform: rotate(82deg); }
+    .cube-line.l5 { left: 23px; top: 13px; width: 24px; transform: rotate(11deg); }
+    .cube-line.l6 { left: 47px; top: 18px; width: 15px; transform: rotate(71deg); }
+    .cube-line.l7 { left: 28px; top: 38px; width: 24px; transform: rotate(-8deg); }
+    .cube-line.l8 { left: 23px; top: 14px; width: 25px; transform: rotate(81deg); }
+    .cube-line.l9 { left: 15px; top: 19px; width: 11px; transform: rotate(-37deg); }
+    .cube-line.l10 { left: 41px; top: 24px; width: 10px; transform: rotate(-38deg); }
+    .cube-line.l11 { left: 19px; top: 44px; width: 10px; transform: rotate(-40deg); }
+    .cube-line.l12 { left: 45px; top: 41px; width: 10px; transform: rotate(-38deg); }
+    .cube-line.c1 { left: 15px; top: 19px; width: 31px; transform: rotate(43deg); }
+    .cube-line.c2 { left: 41px; top: 24px; width: 30px; transform: rotate(134deg); }
+
+    .audio {
+      left: 6px;
+      top: 72px;
+      width: 123px;
+      height: 44px;
+    }
+
+    .audio::before,
+    .audio::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      width: 123px;
+      height: 1px;
+      background: var(--grid);
+    }
+
+    .audio::before { top: 14px; }
+    .audio::after { top: 28px; }
+
+    .bar {
+      position: absolute;
+      bottom: 3px;
+      width: 4px;
+      background: var(--fg);
+    }
+
+    .bar:nth-child(1) { left: 9px; height: 5px; }
+    .bar:nth-child(2) { left: 15px; height: 12px; }
+    .bar:nth-child(3) { left: 21px; height: 20px; }
+    .bar:nth-child(4) { left: 27px; height: 29px; }
+    .bar:nth-child(5) { left: 33px; height: 35px; }
+    .bar:nth-child(6) { left: 39px; height: 31px; }
+    .bar:nth-child(7) { left: 45px; height: 24px; }
+    .bar:nth-child(8) { left: 51px; height: 17px; }
+    .bar:nth-child(9) { left: 57px; height: 10px; }
+    .bar:nth-child(10) { left: 63px; height: 7px; }
+    .bar:nth-child(11) { left: 69px; height: 13px; }
+    .bar:nth-child(12) { left: 75px; height: 21px; }
+    .bar:nth-child(13) { left: 81px; height: 16px; }
+    .bar:nth-child(14) { left: 87px; height: 9px; }
+    .bar:nth-child(15) { left: 93px; height: 6px; }
+    .bar:nth-child(16) { left: 99px; height: 4px; }
+
+    .label {
+      position: absolute;
+      left: 8px;
+      width: 120px;
+      color: var(--fg);
+      font-size: 14px;
+      line-height: 16px;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    .jm { top: 124px; }
+    .audio-state { top: 142px; }
+
+    .segments {
+      position: absolute;
+      left: var(--battery-x);
+      top: var(--battery-y);
+      width: var(--battery-w);
+      height: var(--battery-h);
+      display: grid;
+      grid-template-columns: repeat(var(--cells), 1fr);
+      gap: var(--gap);
+    }
+
+    .segment {
+      border: 1px solid var(--fg);
+      background: var(--bg);
+    }
+
+    .segment.filled {
+      background: var(--battery-color);
+    }
+
+    .opt-a {
+      --battery-x: 8px;
+      --battery-y: 210px;
+      --battery-w: 119px;
+      --battery-h: 13px;
+      --cells: 10;
+      --gap: 2px;
+    }
+
+    .opt-b {
+      --battery-x: 14px;
+      --battery-y: 206px;
+      --battery-w: 107px;
+      --battery-h: 16px;
+      --cells: 8;
+      --gap: 3px;
+    }
+
+    .opt-c {
+      --battery-x: 8px;
+      --battery-y: 214px;
+      --battery-w: 119px;
+      --battery-h: 10px;
+      --cells: 12;
+      --gap: 1px;
+    }
+
+    @media (max-width: 840px) {
+      .options {
+        grid-template-columns: 1fr;
+      }
+
+      .device {
+        width: calc(var(--screen-w) * 2);
+        height: calc(var(--screen-h) * 2);
+      }
+
+      .screen {
+        transform: scale(2);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <h1>Magic Battery Segment Options</h1>
+      <p>Battery bar is moved upward from the bottom. Pick the segment style that feels clearest on the 135x240 screen.</p>
+    </header>
+
+    <div class="toolbar" aria-label="battery states">
+      <button class="active" data-battery="80" data-color="green">80% green</button>
+      <button data-battery="45" data-color="yellow">45% yellow</button>
+      <button data-battery="15" data-color="black">15% black</button>
+    </div>
+
+    <section class="options">
+      <article class="option">
+        <div class="meta">
+          <h2>Option A: 10 cells, balanced</h2>
+          <p>y=210, 10 small cells. This is my recommended default: clear enough, but not too heavy.</p>
+        </div>
+        <div class="device">
+          <div class="screen opt-a" data-cells="10">
+            <div class="panel joy"><div class="joy-dot"></div></div>
+            <div class="panel imu">
+              <div class="cube-line l1"></div><div class="cube-line l2"></div><div class="cube-line l3"></div><div class="cube-line l4"></div>
+              <div class="cube-line l5"></div><div class="cube-line l6"></div><div class="cube-line l7"></div><div class="cube-line l8"></div>
+              <div class="cube-line l9"></div><div class="cube-line l10"></div><div class="cube-line l11"></div><div class="cube-line l12"></div>
+              <div class="cube-line thin c1"></div><div class="cube-line thin c2"></div>
+            </div>
+            <div class="panel audio">
+              <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+              <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+              <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+              <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+            </div>
+            <div class="label jm">J:ON M:OFF</div>
+            <div class="segments"></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="option">
+        <div class="meta">
+          <h2>Option B: 8 cells, stronger</h2>
+          <p>y=206, 8 large cells. More visible at a glance, but visually heavier and takes more screen presence.</p>
+        </div>
+        <div class="device">
+          <div class="screen opt-b" data-cells="8">
+            <div class="panel joy"><div class="joy-dot"></div></div>
+            <div class="panel imu">
+              <div class="cube-line l1"></div><div class="cube-line l2"></div><div class="cube-line l3"></div><div class="cube-line l4"></div>
+              <div class="cube-line l5"></div><div class="cube-line l6"></div><div class="cube-line l7"></div><div class="cube-line l8"></div>
+              <div class="cube-line l9"></div><div class="cube-line l10"></div><div class="cube-line l11"></div><div class="cube-line l12"></div>
+              <div class="cube-line thin c1"></div><div class="cube-line thin c2"></div>
+            </div>
+            <div class="panel audio">
+              <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+              <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+              <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+              <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+            </div>
+            <div class="label jm">J:ON M:OFF</div>
+            <div class="segments"></div>
+          </div>
+        </div>
+      </article>
+
+      <article class="option">
+        <div class="meta">
+          <h2>Option C: 12 cells, compact</h2>
+          <p>y=214, 12 thin cells. Least intrusive, gives finer granularity, but less legible from farther away.</p>
+        </div>
+        <div class="device">
+          <div class="screen opt-c" data-cells="12">
+            <div class="panel joy"><div class="joy-dot"></div></div>
+            <div class="panel imu">
+              <div class="cube-line l1"></div><div class="cube-line l2"></div><div class="cube-line l3"></div><div class="cube-line l4"></div>
+              <div class="cube-line l5"></div><div class="cube-line l6"></div><div class="cube-line l7"></div><div class="cube-line l8"></div>
+              <div class="cube-line l9"></div><div class="cube-line l10"></div><div class="cube-line l11"></div><div class="cube-line l12"></div>
+              <div class="cube-line thin c1"></div><div class="cube-line thin c2"></div>
+            </div>
+            <div class="panel audio">
+              <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+              <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+              <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+              <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+            </div>
+            <div class="label jm">J:ON M:OFF</div>
+            <div class="segments"></div>
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    const colors = {
+      green: 'var(--green)',
+      yellow: 'var(--yellow)',
+      black: 'var(--low)'
+    };
+
+    const screens = Array.from(document.querySelectorAll('.screen'));
+    const buttons = Array.from(document.querySelectorAll('button[data-battery]'));
+
+    function renderBattery(percent, colorName) {
+      screens.forEach((screen) => {
+        const cells = Number(screen.dataset.cells);
+        const filledCells = Math.ceil((Math.max(0, Math.min(100, percent)) / 100) * cells);
+        const container = screen.querySelector('.segments');
+        container.innerHTML = '';
+
+        for (let index = 0; index < cells; index += 1) {
+          const segment = document.createElement('div');
+          segment.className = `segment${index < filledCells ? ' filled' : ''}`;
+          if (index < filledCells) {
+            segment.style.background = colors[colorName];
+          }
+          container.appendChild(segment);
+        }
+      });
+    }
+
+    buttons.forEach((button) => {
+      button.addEventListener('click', () => {
+        buttons.forEach((item) => item.classList.remove('active'));
+        button.classList.add('active');
+        renderBattery(Number(button.dataset.battery), button.dataset.color);
+      });
+    });
+
+    renderBattery(80, 'green');
+  </script>
+</body>
+</html>

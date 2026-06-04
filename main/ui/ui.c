@@ -8,8 +8,6 @@
 #include "esp_log.h"
 #include "ui_setup_screen.h"
 #include "ui_running_screen.h"
-#include "ui_imu_screen.h"
-#include "ui_mic_screen.h"
 
 typedef void (*ui_screen_action_t)(void);
 typedef bool (*ui_screen_check_t)(void);
@@ -37,7 +35,7 @@ static bool load_screen(const char *name, ui_screen_action_t create, ui_screen_c
 /**
  * @brief Switches between different UI screens based on the provided screen ID
  *
- * This function manages the display of different UI screens (setup, running, IMU)
+ * This function manages the display of different UI screens (setup and Magic)
  * by checking if the requested screen exists, creating it if necessary, validating
  * the screen object, and then loading it with a slide-left animation effect.
  *
@@ -47,9 +45,7 @@ static bool load_screen(const char *name, ui_screen_action_t create, ui_screen_c
  *
  * @param screen_id An integer representing the target screen mode:
  *                  - MODE_SETUP: Configuration/setup screen
- *                  - MODE_RUNNING: Main operational screen
- *                  - MODE_IMU: IMU data visualization screen
- *                  - MODE_MIC: Mic spectrum screen
+ *                  - MODE_RUNNING: Magic operational screen
  *                  - Any other value: Logs an error message
  *
  * @note The function uses LVGL's animation API to provide smooth screen transitions
@@ -57,8 +53,7 @@ static bool load_screen(const char *name, ui_screen_action_t create, ui_screen_c
  *       calling this function from different tasks.
  *
  * @warning This function relies on external screen objects and creation/destruction
- *          functions that must be implemented in other UI modules. The use of goto
- *          statements may affect code maintainability.
+ *          functions that must be implemented in other UI modules.
  */
 void switch_screen(int screen_id)
 {
@@ -68,12 +63,6 @@ void switch_screen(int screen_id)
     } else if (screen_id == MODE_RUNNING) {
         load_screen("Running", create_running_screen, ui_running_screen_is_ready,
                     ui_running_screen_load, ui_running_screen_destory);
-    } else if (screen_id == MODE_IMU) {
-        load_screen("IMU", create_imu_screen, ui_imu_screen_is_ready,
-                    ui_imu_screen_load, ui_imu_screen_destory);
-    } else if (screen_id == MODE_MIC) {
-        load_screen("Mic", create_mic_screen, ui_mic_screen_is_ready,
-                    ui_mic_screen_load, ui_mic_screen_destory);
     } else {
         ESP_LOGE("UI", "Invalid screen mode!");
     }

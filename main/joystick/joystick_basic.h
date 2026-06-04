@@ -15,9 +15,7 @@ extern "C" {
 
 #define MODE_SETUP     (0)
 #define MODE_RUNNING   (1)
-#define MODE_IMU       (2)
-#define MODE_MIC       (3)
-#define MODE_SWITCHING (4)
+#define MODE_SWITCHING (2)
 
 #define JOYSTICK_DEAD_ZONE (300)
 #define X_CENTER           (2180)
