@@ -32,6 +32,7 @@
 #define HFP_AUDIO_PREBUFFER_BYTES 2560
 #define HFP_AUDIO_HIGH_WATERMARK_BYTES 5120
 #define HFP_AUDIO_RETRY_MS 1500
+#define HFP_AUDIO_REOPEN_SETTLE_MS 300
 #define HFP_AUDIO_CONNECT_TIMEOUT_MS 3000
 #define HFP_PACKET_STATS_LOG_MS 2000
 #define HID_DROP_LOG_MS 1000
@@ -399,11 +400,19 @@ static bool bt_input_hfp_audio_request_internal(const char *reason)
     if (!s_state.hfp_slc_connected || !s_state.hfp_has_peer) {
         return false;
     }
-    if (s_state.hfp_audio_connected) {
-        return true;
-    }
 
     TickType_t now = xTaskGetTickCount();
+    if (s_state.hfp_audio_connected) {
+        if (s_state.hfp_audio_msbc || (s_state.hfp_peer_features & ESP_HF_CLIENT_PEER_FEAT_CODEC) == 0) {
+            return true;
+        }
+        ESP_LOGW(TAG, "HFP audio is CVSD while peer supports codec; reconnecting for mSBC reason=%s",
+                 reason);
+        bt_input_hfp_audio_disconnect();
+        s_state.hfp_next_audio_req = now + pdMS_TO_TICKS(HFP_AUDIO_REOPEN_SETTLE_MS);
+        return false;
+    }
+
     if (s_state.hfp_audio_connecting) {
         if (s_state.hfp_audio_connect_started != 0 &&
             (now - s_state.hfp_audio_connect_started) >= pdMS_TO_TICKS(HFP_AUDIO_CONNECT_TIMEOUT_MS)) {
@@ -423,6 +432,8 @@ static bool bt_input_hfp_audio_request_internal(const char *reason)
 
     s_state.hfp_audio_connecting = true;
     s_state.hfp_audio_connect_started = now;
+    s_state.hfp_audio_msbc = false;
+    s_state.hfp_sync_conn_handle = 0;
     s_state.hfp_audio_req_attempts++;
     esp_err_t ret = esp_hf_client_connect_audio(s_state.hfp_peer_bda);
     if (ret != ESP_OK) {
@@ -445,27 +456,6 @@ static void bt_input_hfp_audio_schedule_retry(const char *reason)
     s_state.hfp_audio_connect_started = 0;
     s_state.hfp_next_audio_req = xTaskGetTickCount() + pdMS_TO_TICKS(HFP_AUDIO_RETRY_MS);
     ESP_LOGI(TAG, "HFP audio retry scheduled: %s retry_ms=%u", reason, HFP_AUDIO_RETRY_MS);
-}
-
-static bool bt_input_hfp_vrec_start(const char *reason)
-{
-    if (!s_state.mic_enabled || !s_state.hfp_slc_connected || !s_state.hfp_has_peer) {
-        return false;
-    }
-    if ((s_state.hfp_peer_features & ESP_HF_CLIENT_PEER_FEAT_VREC) == 0) {
-        return false;
-    }
-    if (s_state.hfp_vrec_requested || s_state.hfp_vrec_active) {
-        return true;
-    }
-
-    esp_err_t ret = esp_hf_client_start_voice_recognition();
-    if (ret == ESP_OK) {
-        s_state.hfp_vrec_requested = true;
-    }
-    ESP_LOGI(TAG, "HFP vrec start %s: %s peer_feat=0x%" PRIx32,
-             reason, esp_err_to_name(ret), s_state.hfp_peer_features);
-    return ret == ESP_OK;
 }
 
 static void bt_input_hfp_vrec_stop(const char *reason)
@@ -527,7 +517,7 @@ static void bt_input_hfp_tx_timer_cb(void *arg)
 {
     (void)arg;
 
-    if (!s_state.hfp_audio_connected || !s_state.mic_enabled || !s_state.audio_open) {
+    if (!s_state.hfp_audio_connected || !s_state.audio_open) {
         return;
     }
 
@@ -536,7 +526,9 @@ static void bt_input_hfp_tx_timer_cb(void *arg)
         packet_len = bt_input_hfp_default_packet_len();
     }
 
-    if (!s_hfp_tx_started) {
+    if (!s_state.mic_enabled) {
+        s_hfp_tx_started = true;
+    } else if (!s_hfp_tx_started) {
         size_t used = bt_input_hfp_fifo_used();
         size_t prebuffer = HFP_AUDIO_PREBUFFER_BYTES;
         if (prebuffer < packet_len) {
@@ -576,7 +568,7 @@ static uint32_t bt_input_hfp_outgoing_cb(uint8_t *buf, uint32_t len)
 
     s_hfp_tx_packet_len = len;
 
-    if (!s_state.mic_enabled || !s_state.audio_open) {
+    if (!s_state.audio_open) {
         s_hfp_cb_underruns++;
         bt_input_hfp_log_audio_stats("cb disabled");
         return 0;
@@ -587,6 +579,14 @@ static uint32_t bt_input_hfp_outgoing_cb(uint8_t *buf, uint32_t len)
         s_hfp_cb_budget_empty++;
     } else {
         s_hfp_tx_budget_packets--;
+    }
+
+    if (!s_state.mic_enabled) {
+        bt_input_hfp_fill_fade_silence(buf, len);
+        s_hfp_cb_calls++;
+        s_hfp_cb_bytes += len;
+        bt_input_hfp_log_audio_stats(budget_empty ? "cb mute_budget" : "cb mute");
+        return len;
     }
 
     size_t read_len = bt_input_hfp_fifo_read(buf, len);
@@ -692,8 +692,8 @@ static void bt_input_hfp_cb(esp_hf_client_cb_event_t event, esp_hf_client_cb_par
         if (s_state.hfp_slc_connected) {
             s_state.hfp_peer_features = param->conn_stat.peer_feat;
             esp_hf_client_volume_update(ESP_HF_VOLUME_CONTROL_TARGET_MIC, 15);
-            if (!bt_input_hfp_vrec_start("after SLC")) {
-                bt_input_hfp_audio_request_internal("after SLC");
+            if (s_state.mic_enabled) {
+                bt_input_hfp_audio_request_internal("after SLC mic");
             }
         }
         if (param->conn_stat.state == ESP_HF_CLIENT_CONNECTION_STATE_DISCONNECTED) {
@@ -730,6 +730,10 @@ static void bt_input_hfp_cb(esp_hf_client_cb_event_t event, esp_hf_client_cb_par
             s_state.hfp_last_pkt_stat_req = 0;
             s_state.hfp_next_audio_req = 0;
             s_state.hfp_audio_req_attempts = 0;
+            if (!s_state.mic_enabled) {
+                ESP_LOGI(TAG, "HFP audio opened while mic disabled; sending silence codec=%s rate=%" PRIu32,
+                         bt_input_hfp_codec_text(), bt_input_hfp_pcm_sample_rate());
+            }
             esp_hf_client_register_data_callback(bt_input_hfp_incoming_cb, bt_input_hfp_outgoing_cb);
             bt_input_audio_open();
         } else if (param->audio_stat.state == ESP_HF_CLIENT_AUDIO_STATE_CONNECTING) {
@@ -758,9 +762,6 @@ static void bt_input_hfp_cb(esp_hf_client_cb_event_t event, esp_hf_client_cb_par
         ESP_LOGI(TAG, "HFP vrec state: %d active=%d mic=%d audio=%d",
                  param->bvra.value, s_state.hfp_vrec_active, s_state.mic_enabled,
                  s_state.hfp_audio_connected);
-        if (s_state.hfp_vrec_active && s_state.mic_enabled && !s_state.hfp_audio_connected) {
-            bt_input_hfp_audio_request_internal("after vrec");
-        }
         break;
     case ESP_HF_CLIENT_AT_RESPONSE_EVT:
         ESP_LOGI(TAG, "HFP AT response: code=%d cme=%d vrec_req=%d vrec=%d audio=%d",
@@ -1104,12 +1105,21 @@ void bt_input_hfp_mic_set_enabled(bool enabled)
         s_state.hfp_audio_connecting = false;
         s_state.hfp_audio_connect_started = 0;
         s_state.hfp_next_audio_req = 0;
+        ESP_LOGI(TAG, "HFP mic disabled: audio=%d open=%d codec=%s rate=%" PRIu32 " keep_silence=1",
+                 s_state.hfp_audio_connected, s_state.audio_open, bt_input_hfp_codec_text(),
+                 bt_input_hfp_pcm_sample_rate());
     } else {
-        bool vrec_requested = bt_input_hfp_vrec_start("on mic enable");
-        bool audio_requested = bt_input_hfp_audio_request_internal(
-            vrec_requested ? "on mic enable vrec fallback" : "on mic enable");
-        ESP_LOGI(TAG, "HFP mic enabled: vrec=%d audio_req=%d audio=%d codec=%s rate=%" PRIu32,
-                 vrec_requested, audio_requested, s_state.hfp_audio_connected, bt_input_hfp_codec_text(),
+        s_state.hfp_vrec_requested = false;
+        s_state.hfp_vrec_active = false;
+        s_state.hfp_audio_connect_started = 0;
+        if (!s_state.hfp_audio_connected) {
+            s_state.hfp_audio_connecting = false;
+        }
+        s_state.hfp_next_audio_req = 0;
+        bt_input_hfp_audio_reset();
+        bool audio_requested = bt_input_hfp_audio_request_internal("on mic enable");
+        ESP_LOGI(TAG, "HFP mic enabled: audio_req=%d audio=%d codec=%s rate=%" PRIu32,
+                 audio_requested, s_state.hfp_audio_connected, bt_input_hfp_codec_text(),
                  bt_input_hfp_pcm_sample_rate());
     }
 }
@@ -1121,7 +1131,8 @@ void bt_input_hfp_audio_request(void)
                  s_state.hfp_has_peer);
         return;
     }
-    if (s_state.hfp_audio_connected) {
+    if (s_state.hfp_audio_connected &&
+        (s_state.hfp_audio_msbc || (s_state.hfp_peer_features & ESP_HF_CLIENT_PEER_FEAT_CODEC) == 0)) {
         return;
     }
 
@@ -1135,17 +1146,17 @@ void bt_input_hfp_audio_disconnect(void)
     }
 
     esp_err_t ret = esp_hf_client_disconnect_audio(s_state.hfp_peer_bda);
+    s_state.hfp_audio_connected = false;
     s_state.hfp_audio_connecting = false;
+    s_state.hfp_audio_msbc = false;
+    s_state.hfp_sync_conn_handle = 0;
     s_state.hfp_next_audio_req = 0;
+    bt_input_audio_close();
     ESP_LOGI(TAG, "HFP audio disconnect: %s", esp_err_to_name(ret));
 }
 
 void bt_input_hfp_audio_reset(void)
 {
-    if (!s_state.audio_open) {
-        return;
-    }
-
     bt_input_hfp_fifo_reset();
     s_hfp_tx_budget_packets = 0;
     s_hfp_tx_credit_bytes = 0;

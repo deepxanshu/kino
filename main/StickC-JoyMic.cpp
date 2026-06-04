@@ -33,8 +33,8 @@ static void log_porta_levels(const char *stage)
 
 /**
  * @brief Handle Button Press.
- * 1. Click BtnA to toggle Mouse <-> Mic.
- * 2. Click BtnB to toggle Setup <-> Mouse. BtnB is the only setup entry.
+ * 1. Click BtnA on Magic to toggle Mic and Joystick without changing page.
+ * 2. Click BtnB to toggle Setup <-> Magic. BtnB is the only setup entry.
  * 3. Hold BtnB 3s to reopen pairing; hold BtnB 8s to clear bonds and reboot.
  */
 static void handle_button_press(void)
@@ -79,12 +79,12 @@ static void handle_button_press(void)
 
     if (M5.BtnA.wasClicked()) {
         uint8_t current_mode = app_state_get_mode();
-        uint8_t screen_mode = device_mode_next_primary(current_mode);
-        ESP_LOGI(TAG, "BtnA click: mode=%s target=%s A_pressed=%d B_pressed=%d gpio37=%d gpio39=%d",
-                 device_mode_name(current_mode), device_mode_name(screen_mode), M5.BtnA.isPressed(),
+        ESP_LOGI(TAG, "BtnA click: mode=%s mic=%d joy=%d A_pressed=%d B_pressed=%d gpio37=%d gpio39=%d",
+                 device_mode_name(current_mode), device_mode_magic_mic_enabled(),
+                 device_mode_magic_joystick_enabled(), M5.BtnA.isPressed(),
                  M5.BtnB.isPressed(), gpio_get_level(GPIO_NUM_37), gpio_get_level(GPIO_NUM_39));
-        if (screen_mode != current_mode) {
-            device_mode_enter(screen_mode);
+        if (current_mode == MODE_RUNNING) {
+            device_mode_toggle_magic_function();
         }
         wait_release = true;
         return;

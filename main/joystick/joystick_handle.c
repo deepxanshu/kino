@@ -6,6 +6,7 @@
 #include "joystick_handle.h"
 #include "../app_state.h"
 #include "../bluetooth/bt_input.h"
+#include "../device_mode.h"
 #include "../ui/ui_setup_screen.h"
 #include "../ui/ui_running_screen.h"
 #include "../ui/ui_imu_screen.h"
@@ -313,6 +314,10 @@ void handle_setup_screen(void *pvParam)
 
     while (1) {
         if (app_state_get_mode() == MODE_SETUP) {
+            if (device_mode_peripheral_switching()) {
+                vTaskDelay(pdMS_TO_TICKS(50));
+                continue;
+            }
             if (!joystick_is_ready()) {
                 joystick_recover_if_due("setup JoyC not ready");
             }
@@ -362,9 +367,24 @@ void handle_running_screen(void *pvParam)
     bool mouse_mode_active = false;
     TickType_t last_ui_update = 0;
     TickType_t last_mouse_log = 0;
+    static const mic_spectrum_data_t empty_spectrum = {
+        .db = -90,
+    };
 
     while (1) {
         if (app_state_get_mode() == MODE_RUNNING) {
+            if (device_mode_peripheral_switching()) {
+                mouse_mode_active = false;
+                last_pressed = false;
+                vTaskDelay(pdMS_TO_TICKS(50));
+                continue;
+            }
+            if (!device_mode_magic_joystick_enabled()) {
+                mouse_mode_active = false;
+                last_pressed = false;
+                vTaskDelay(pdMS_TO_TICKS(50));
+                continue;
+            }
             if (!joystick_is_ready()) {
                 joystick_recover_if_due("mouse JoyC not ready");
             }
@@ -390,7 +410,10 @@ void handle_running_screen(void *pvParam)
             if ((now - last_ui_update) >= pdMS_TO_TICKS(MOUSE_UI_REFRESH_MS)) {
                 update_running_screen(snapshot.joyX, snapshot.joyY, snapshot.bat,
                                       snapshot.joy_pressed, bt_input_hid_connected(),
-                                      snapshot.accel_x, snapshot.accel_y, snapshot.accel_z);
+                                      snapshot.accel_x, snapshot.accel_y, snapshot.accel_z,
+                                      &empty_spectrum, false, true,
+                                      bt_input_hfp_connected(), bt_input_hfp_audio_connected(),
+                                      bt_input_hfp_pcm_sample_rate());
                 last_ui_update = now;
             }
 

@@ -17,8 +17,9 @@
 extern "C" {
 #include "../app_state.h"
 #include "../bluetooth/bt_input.h"
+#include "../device_mode.h"
 #include "../mic/mic_spectrum.h"
-#include "../ui/ui_mic_screen.h"
+#include "../ui/ui_running_screen.h"
 }
 
 #define MIC_CVSD_SAMPLE_RATE 8000
@@ -273,7 +274,6 @@ void mic_mode_exit(void)
     s_mic_active = false;
     s_mic_muted  = true;
     bt_input_hfp_mic_set_enabled(false);
-    bt_input_hfp_audio_disconnect();
 
     M5.Mic.end();
 
@@ -309,7 +309,7 @@ void handle_mic_screen(void *pvParam)
     empty_spectrum.db = -90;
 
     while (1) {
-        if (app_state_get_mode() != MODE_MIC) {
+        if (app_state_get_mode() != MODE_RUNNING || !device_mode_magic_mic_enabled()) {
             has_ready_frame = false;
             record_slot = 0;
             vTaskDelay(pdMS_TO_TICKS(200));
@@ -321,9 +321,11 @@ void handle_mic_screen(void *pvParam)
             has_ready_frame = false;
             record_slot = 0;
             uint32_t sample_rate = bt_input_hfp_pcm_sample_rate();
-            update_mic_screen(&empty_spectrum, snapshot.bat, s_mic_active, s_mic_muted,
-                              sample_rate,
-                              bt_input_hfp_connected(), bt_input_hfp_audio_connected());
+            update_running_screen(snapshot.joyX, snapshot.joyY, snapshot.bat, snapshot.joy_pressed,
+                                  bt_input_hid_connected(), snapshot.accel_x, snapshot.accel_y,
+                                  snapshot.accel_z, &empty_spectrum, s_mic_active && !s_mic_muted,
+                                  false, bt_input_hfp_connected(), bt_input_hfp_audio_connected(),
+                                  sample_rate);
             vTaskDelay(pdMS_TO_TICKS(50));
             continue;
         }
@@ -349,13 +351,13 @@ void handle_mic_screen(void *pvParam)
         int64_t frame_gap_us = s_mic_last_frame_end_us == 0 ? 0 : record_end_us - s_mic_last_frame_end_us;
         s_mic_last_frame_end_us = record_end_us;
 
-        if (!s_mic_active || app_state_get_mode() != MODE_MIC) {
+        if (!s_mic_active || app_state_get_mode() != MODE_RUNNING || !device_mode_magic_mic_enabled()) {
             s_mic_busy = false;
             vTaskDelay(pdMS_TO_TICKS(20));
             continue;
         }
 
-        if (queued && s_mic_active && app_state_get_mode() == MODE_MIC) {
+        if (queued && s_mic_active && app_state_get_mode() == MODE_RUNNING && device_mode_magic_mic_enabled()) {
             bool process_ready = has_ready_frame &&
                                  ready_sample_count == sample_count &&
                                  ready_sample_rate == sample_rate;
@@ -381,18 +383,23 @@ void handle_mic_screen(void *pvParam)
             TickType_t now = xTaskGetTickCount();
             if ((now - last_ui_update) >= pdMS_TO_TICKS(MIC_UI_UPDATE_MS)) {
                 snapshot = app_state_snapshot();
-                mic_spectrum_compute(ready_samples, sample_count, sample_rate, MIC_BAR_MAX_HEIGHT, &spectrum);
-                update_mic_screen(&spectrum, snapshot.bat, true, false, sample_rate,
-                                  bt_input_hfp_connected(), bt_input_hfp_audio_connected());
+                mic_spectrum_compute(ready_samples, sample_count, sample_rate, MAGIC_AUDIO_BAR_MAX_HEIGHT, &spectrum);
+                update_running_screen(snapshot.joyX, snapshot.joyY, snapshot.bat, snapshot.joy_pressed,
+                                      bt_input_hid_connected(), snapshot.accel_x, snapshot.accel_y,
+                                      snapshot.accel_z, &spectrum, true, false,
+                                      bt_input_hfp_connected(), bt_input_hfp_audio_connected(),
+                                      sample_rate);
                 last_ui_update = now;
             }
         } else {
             log_mic_record_issue("record returned false", record_us);
             snapshot = app_state_snapshot();
             sample_rate = bt_input_hfp_pcm_sample_rate();
-            update_mic_screen(&empty_spectrum, snapshot.bat, false, false,
-                              sample_rate,
-                              bt_input_hfp_connected(), bt_input_hfp_audio_connected());
+            update_running_screen(snapshot.joyX, snapshot.joyY, snapshot.bat, snapshot.joy_pressed,
+                                  bt_input_hid_connected(), snapshot.accel_x, snapshot.accel_y,
+                                  snapshot.accel_z, &empty_spectrum, false, false,
+                                  bt_input_hfp_connected(), bt_input_hfp_audio_connected(),
+                                  sample_rate);
             vTaskDelay(pdMS_TO_TICKS(10));
         }
         s_mic_busy = false;

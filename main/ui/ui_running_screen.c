@@ -17,6 +17,7 @@ static lv_obj_t *running_screen   = NULL;
 static lv_obj_t *joystick_dot     = NULL;
 static lv_obj_t *joystick_area    = NULL;
 static lv_obj_t *cube_container   = NULL;
+static lv_obj_t *audio_area       = NULL;
 static lv_obj_t *battery_label    = NULL;
 static lv_obj_t *mouse_info_label = NULL;
 static lv_obj_t *click_info_label = NULL;
@@ -25,6 +26,11 @@ static lv_obj_t *imu_info_label   = NULL;
 
 #define MOUSE_PANEL_SIZE 58
 #define MOUSE_DOT_SIZE   8
+#define MAGIC_AUDIO_AREA_WIDTH  123
+#define MAGIC_AUDIO_AREA_HEIGHT 44
+#define MAGIC_AUDIO_BAR_WIDTH   4
+#define MAGIC_AUDIO_BAR_GAP     2
+#define MAGIC_AUDIO_BAR_BASE_Y  40
 
 typedef struct {
     float x;
@@ -39,8 +45,14 @@ typedef struct {
 
 static lv_obj_t *edge_lines[12];
 static lv_obj_t *cross_lines[2];
+static lv_obj_t *audio_bars[MIC_SPECTRUM_BANDS];
 static lv_point_t edge_points[12][2];
 static lv_point_t cross_points[2][2];
+static uint8_t s_last_audio_bars[MIC_SPECTRUM_BANDS];
+static lv_point_t s_audio_grid_points[2][2] = {
+    {{0, 14}, {MAGIC_AUDIO_AREA_WIDTH, 14}},
+    {{0, 28}, {MAGIC_AUDIO_AREA_WIDTH, 28}},
+};
 
 static const point3d_t vertices[8] = {
     {-1, -1, -1}, {1, -1, -1}, {1, 1, -1}, {-1, 1, -1},
@@ -82,6 +94,41 @@ static lv_obj_t *create_status_label(lv_obj_t *parent, const char *text, int16_t
     lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
     ui_theme_apply_label(label);
     return label;
+}
+
+static void create_audio_grid_line(lv_obj_t *parent, int index)
+{
+    lv_obj_t *line = lv_line_create(parent);
+    lv_line_set_points(line, s_audio_grid_points[index], 2);
+    lv_obj_set_style_line_color(line, ui_theme_grid_color(), 0);
+    lv_obj_set_style_line_width(line, 1, 0);
+}
+
+static void update_magic_audio_bars(const mic_spectrum_data_t *spectrum)
+{
+    int16_t total_width = MIC_SPECTRUM_BANDS * MAGIC_AUDIO_BAR_WIDTH +
+                          (MIC_SPECTRUM_BANDS - 1) * MAGIC_AUDIO_BAR_GAP;
+    int16_t start_x = (MAGIC_AUDIO_AREA_WIDTH - total_width) / 2;
+
+    for (int i = 0; i < MIC_SPECTRUM_BANDS; i++) {
+        uint8_t target = 0;
+        if (spectrum != NULL) {
+            target = spectrum->bars[i] > MAGIC_AUDIO_BAR_MAX_HEIGHT ? MAGIC_AUDIO_BAR_MAX_HEIGHT : spectrum->bars[i];
+        }
+
+        uint8_t height = (uint8_t)((s_last_audio_bars[i] * 3 + target) / 4);
+        if (target > s_last_audio_bars[i]) {
+            height = target;
+        }
+        s_last_audio_bars[i] = height;
+
+        if (audio_bars[i] != NULL) {
+            uint8_t draw_height = height == 0 ? 1 : height;
+            lv_obj_set_size(audio_bars[i], MAGIC_AUDIO_BAR_WIDTH, draw_height);
+            lv_obj_align(audio_bars[i], LV_ALIGN_TOP_LEFT, start_x + i * (MAGIC_AUDIO_BAR_WIDTH + MAGIC_AUDIO_BAR_GAP),
+                         MAGIC_AUDIO_BAR_BASE_Y - draw_height);
+        }
+    }
 }
 
 static void update_mouse_imu_cube(float ax, float ay, float az)
@@ -163,7 +210,7 @@ void create_running_screen(void)
     ui_theme_apply_screen(running_screen);
 
     lv_obj_t *label = lv_label_create(running_screen);
-    lv_label_set_text(label, "Mouse");
+    lv_label_set_text(label, "Magic");
     lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 6);
     lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
     ui_theme_apply_label(label);
@@ -221,11 +268,36 @@ void create_running_screen(void)
         lv_line_set_points(cross_lines[i], default_points, 2);
     }
 
-    battery_label    = create_status_label(running_screen, "BT:WAIT B:--", 100);
-    mouse_info_label = create_status_label(running_screen, "Mouse:ON", 120);
-    click_info_label = create_status_label(running_screen, "Click:UP", 140);
-    joy_info_label   = create_status_label(running_screen, "Joy:----,----", 160);
-    imu_info_label   = create_status_label(running_screen, "IMU P:0 R:0", 180);
+    audio_area = lv_obj_create(running_screen);
+    lv_obj_set_size(audio_area, MAGIC_AUDIO_AREA_WIDTH, MAGIC_AUDIO_AREA_HEIGHT);
+    lv_obj_align(audio_area, LV_ALIGN_TOP_LEFT, 6, 96);
+    ui_theme_apply_panel(audio_area);
+    lv_obj_set_style_border_width(audio_area, 1, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(audio_area, 0, LV_PART_MAIN);
+    lv_obj_clear_flag(audio_area, LV_OBJ_FLAG_SCROLLABLE);
+
+    create_audio_grid_line(audio_area, 0);
+    create_audio_grid_line(audio_area, 1);
+
+    int16_t total_width = MIC_SPECTRUM_BANDS * MAGIC_AUDIO_BAR_WIDTH +
+                          (MIC_SPECTRUM_BANDS - 1) * MAGIC_AUDIO_BAR_GAP;
+    int16_t start_x = (MAGIC_AUDIO_AREA_WIDTH - total_width) / 2;
+    for (int i = 0; i < MIC_SPECTRUM_BANDS; i++) {
+        audio_bars[i] = lv_obj_create(audio_area);
+        lv_obj_set_size(audio_bars[i], MAGIC_AUDIO_BAR_WIDTH, 1);
+        lv_obj_set_style_bg_color(audio_bars[i], ui_theme_fg_color(), LV_PART_MAIN);
+        lv_obj_set_style_border_width(audio_bars[i], 0, LV_PART_MAIN);
+        lv_obj_set_style_radius(audio_bars[i], 0, LV_PART_MAIN);
+        lv_obj_align(audio_bars[i], LV_ALIGN_TOP_LEFT, start_x + i * (MAGIC_AUDIO_BAR_WIDTH + MAGIC_AUDIO_BAR_GAP),
+                     MAGIC_AUDIO_BAR_BASE_Y);
+        s_last_audio_bars[i] = 0;
+    }
+
+    battery_label    = create_status_label(running_screen, "Magic B:--", 146);
+    mouse_info_label = create_status_label(running_screen, "J:ON M:OFF", 164);
+    click_info_label = create_status_label(running_screen, "HID:WAIT HFP:WAIT", 182);
+    joy_info_label   = create_status_label(running_screen, "Click:UP A:OFF", 200);
+    imu_info_label   = create_status_label(running_screen, "P:0 R:0 L:-90", 218);
 
     lvgl_port_unlock();
 }
@@ -259,10 +331,13 @@ bool ui_running_screen_load(bool animated)
 }
 
 /**
- * @brief Update joystick, mouse status, and IMU cube on the merged Mouse page.
+ * @brief Update joystick, IMU, audio, and status on the Magic page.
  */
 void update_running_screen(int16_t joyX, int16_t joyY, uint8_t bat, bool pressed, bool bt_connected,
-                           float accel_x, float accel_y, float accel_z)
+                           float accel_x, float accel_y, float accel_z,
+                           const mic_spectrum_data_t *spectrum, bool mic_running,
+                           bool joystick_enabled, bool hfp_connected, bool audio_connected,
+                           uint32_t sample_rate)
 {
     int16_t min_pos = MOUSE_DOT_SIZE / 2;
     int16_t max_pos = MOUSE_PANEL_SIZE - (MOUSE_DOT_SIZE / 2);
@@ -287,22 +362,33 @@ void update_running_screen(int16_t joyX, int16_t joyY, uint8_t bat, bool pressed
     }
     if (running_screen == NULL || !lv_obj_is_valid(running_screen) ||
         joystick_dot == NULL || battery_label == NULL || mouse_info_label == NULL ||
-        click_info_label == NULL || joy_info_label == NULL || imu_info_label == NULL) {
+        click_info_label == NULL || joy_info_label == NULL || imu_info_label == NULL ||
+        audio_area == NULL || !lv_obj_is_valid(audio_area)) {
         lvgl_port_unlock();
         return;
     }
 
     lv_obj_align(joystick_dot, LV_ALIGN_TOP_LEFT, x_pos - (MOUSE_DOT_SIZE / 2), y_pos - (MOUSE_DOT_SIZE / 2));
+    lv_obj_set_style_bg_color(joystick_dot,
+                              joystick_enabled ? lv_palette_main(LV_PALETTE_RED) : ui_theme_grid_color(),
+                              LV_PART_MAIN);
     update_mouse_imu_cube(accel_x, accel_y, accel_z);
+    update_magic_audio_bars(mic_running ? spectrum : NULL);
 
     int16_t pitch_deg = (int16_t)lroundf(s_pitch * 180.0f / (float)M_PI);
     int16_t roll_deg  = (int16_t)lroundf(s_roll * 180.0f / (float)M_PI);
+    int spectrum_db = spectrum == NULL ? -90 : spectrum->db;
 
-    lv_label_set_text_fmt(battery_label, "BT:%s B:%u%%", bt_connected ? "OK" : "WAIT", (unsigned)bat);
-    lv_label_set_text(mouse_info_label, "Mouse:ON");
-    lv_label_set_text(click_info_label, pressed ? "Click:DOWN" : "Click:UP");
-    lv_label_set_text_fmt(joy_info_label, "Joy:%u,%u", (unsigned)joyX, (unsigned)joyY);
-    lv_label_set_text_fmt(imu_info_label, "IMU P:%d R:%d", pitch_deg, roll_deg);
+    lv_label_set_text_fmt(battery_label, "Magic B:%u%%", (unsigned)bat);
+    lv_label_set_text_fmt(mouse_info_label, "J:%s M:%s", joystick_enabled ? "ON" : "OFF",
+                          mic_running ? "ON" : "OFF");
+    lv_label_set_text_fmt(click_info_label, "HID:%s HFP:%s", bt_connected ? "OK" : "WAIT",
+                          hfp_connected ? "SLC" : "WAIT");
+    lv_label_set_text_fmt(joy_info_label, "Click:%s A:%s", pressed ? "DOWN" : "UP",
+                          audio_connected ? "ON" : "OFF");
+    lv_label_set_text_fmt(imu_info_label, "P:%d R:%d L:%d", pitch_deg, roll_deg,
+                          mic_running ? spectrum_db : -90);
+    (void)sample_rate;
     lvgl_port_unlock();
 }
 
@@ -325,6 +411,7 @@ void ui_running_screen_destory(void)
     joystick_dot       = NULL;
     joystick_area      = NULL;
     cube_container     = NULL;
+    audio_area         = NULL;
     battery_label      = NULL;
     mouse_info_label   = NULL;
     click_info_label   = NULL;
@@ -335,5 +422,9 @@ void ui_running_screen_destory(void)
     }
     for (int i = 0; i < 2; ++i) {
         cross_lines[i] = NULL;
+    }
+    for (int i = 0; i < MIC_SPECTRUM_BANDS; i++) {
+        audio_bars[i] = NULL;
+        s_last_audio_bars[i] = 0;
     }
 }
