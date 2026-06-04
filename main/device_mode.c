@@ -89,26 +89,42 @@ void device_mode_toggle_magic_function(void)
         ESP_LOGI(TAG, "magic toggle ignored mode=%s", device_mode_name(app_state_get_mode()));
         return;
     }
+
+    (void)device_mode_set_magic_mic_enabled(!s_magic_mic_enabled);
+}
+
+bool device_mode_set_magic_mic_enabled(bool enabled)
+{
+    if (app_state_get_mode() != MODE_RUNNING) {
+        ESP_LOGI(TAG, "magic set ignored mode=%s target_mic=%d", device_mode_name(app_state_get_mode()), enabled);
+        return false;
+    }
     if (s_peripheral_switching) {
-        ESP_LOGI(TAG, "magic toggle ignored: peripheral switch already running");
-        return;
+        ESP_LOGI(TAG, "magic set ignored: peripheral switch already running target_mic=%d", enabled);
+        return false;
+    }
+    if (s_magic_mic_enabled == enabled) {
+        ESP_LOGI(TAG, "magic set noop: mic=%d joy_ready=%d hid=%s hfp=%s audio=%s",
+                 s_magic_mic_enabled, joystick_is_ready(), bt_input_hid_status_text(),
+                 bt_input_hfp_status_text(), bt_input_audio_status_text());
+        return true;
     }
 
     s_peripheral_switching = true;
 
-    ESP_LOGI(TAG, "magic toggle begin: mic=%d joy_ready=%d hid=%s hfp=%s audio=%s",
-             s_magic_mic_enabled, joystick_is_ready(), bt_input_hid_status_text(),
+    ESP_LOGI(TAG, "magic set begin: mic=%d target_mic=%d joy_ready=%d hid=%s hfp=%s audio=%s",
+             s_magic_mic_enabled, enabled, joystick_is_ready(), bt_input_hid_status_text(),
              bt_input_hfp_status_text(), bt_input_audio_status_text());
 
-    if (s_magic_mic_enabled) {
+    if (!enabled) {
         mic_mode_exit();
         reset_shared_port_a_pins(pdMS_TO_TICKS(120));
         app_state_set_joystick(X_CENTER, Y_CENTER, false);
         joystick_recover(true);
         s_magic_mic_enabled = false;
-        ESP_LOGI(TAG, "magic toggle commit: mic=0 joystick=1 ready=%d", joystick_is_ready());
+        ESP_LOGI(TAG, "magic set commit: mic=0 joystick=1 ready=%d", joystick_is_ready());
         s_peripheral_switching = false;
-        return;
+        return true;
     }
 
     s_magic_mic_enabled = true;
@@ -118,9 +134,10 @@ void device_mode_toggle_magic_function(void)
     joystick_deinit();
     reset_shared_port_a_pins(pdMS_TO_TICKS(80));
     mic_mode_enter();
-    ESP_LOGI(TAG, "magic toggle commit: mic=1 joystick=0 hfp=%s audio=%s",
+    ESP_LOGI(TAG, "magic set commit: mic=1 joystick=0 hfp=%s audio=%s",
              bt_input_hfp_status_text(), bt_input_audio_status_text());
     s_peripheral_switching = false;
+    return true;
 }
 
 void device_mode_enter(uint8_t next_mode)

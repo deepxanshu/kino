@@ -66,6 +66,7 @@ typedef struct {
     TickType_t hfp_audio_connect_started;
     uint32_t hfp_audio_req_attempts;
     uint8_t mouse_report[BT_HID_MOUSE_REPORT_SIZE];
+    uint8_t key_report[BT_HID_KEY_REPORT_SIZE];
     SemaphoreHandle_t lock;
     bool audio_open;
 } bt_input_state_t;
@@ -222,7 +223,7 @@ static bool bt_input_check_report(uint8_t report_id, uint8_t report_type)
         if (report_id == ESP_HIDD_BOOT_REPORT_ID_MOUSE) {
             return true;
         }
-    } else if (report_id == 0) {
+    } else if (report_id == BT_HID_MOUSE_REPORT_ID || report_id == BT_HID_KEY_REPORT_ID) {
         return true;
     }
 
@@ -837,6 +838,7 @@ static void bt_input_hidd_cb(esp_hidd_cb_event_t event, esp_hidd_cb_param_t *par
     case ESP_HIDD_CLOSE_EVT:
         s_state.hid_connected = false;
         memset(s_state.mouse_report, 0, sizeof(s_state.mouse_report));
+        memset(s_state.key_report, 0, sizeof(s_state.key_report));
         ESP_LOGI(TAG, "HID close state: %d status: %d", param->close.conn_status, param->close.status);
         break;
     case ESP_HIDD_SEND_REPORT_EVT:
@@ -850,13 +852,18 @@ static void bt_input_hidd_cb(esp_hidd_cb_event_t event, esp_hidd_cb_param_t *par
         ESP_LOGI(TAG, "HID get report id=%u type=%u protocol=%u", param->get_report.report_id,
                  param->get_report.report_type, s_state.protocol_mode);
         if (bt_input_check_report(param->get_report.report_id, param->get_report.report_type)) {
-            uint8_t report_id = 0;
+            uint8_t report_id = BT_HID_MOUSE_REPORT_ID;
             uint16_t report_len = BT_HID_MOUSE_REPORT_SIZE;
+            uint8_t *report_data = s_state.mouse_report;
             if (s_state.protocol_mode == ESP_HIDD_BOOT_MODE) {
                 report_id = ESP_HIDD_BOOT_REPORT_ID_MOUSE;
                 report_len = ESP_HIDD_BOOT_REPORT_SIZE_MOUSE - 1;
+            } else if (param->get_report.report_id == BT_HID_KEY_REPORT_ID) {
+                report_id = BT_HID_KEY_REPORT_ID;
+                report_len = BT_HID_KEY_REPORT_SIZE;
+                report_data = s_state.key_report;
             }
-            esp_bt_hid_device_send_report(param->get_report.report_type, report_id, report_len, s_state.mouse_report);
+            esp_bt_hid_device_send_report(param->get_report.report_type, report_id, report_len, report_data);
         }
         break;
     case ESP_HIDD_SET_PROTOCOL_EVT:
@@ -1100,7 +1107,7 @@ void bt_input_mouse_send(uint8_t buttons, int8_t dx, int8_t dy, int8_t wheel, in
     s_state.mouse_report[3] = (uint8_t)wheel;
     s_state.mouse_report[4] = (uint8_t)pan;
 
-    uint8_t report_id = 0;
+    uint8_t report_id = BT_HID_MOUSE_REPORT_ID;
     uint16_t report_len = BT_HID_MOUSE_REPORT_SIZE;
     if (s_state.protocol_mode == ESP_HIDD_BOOT_MODE) {
         report_id = ESP_HIDD_BOOT_REPORT_ID_MOUSE;
@@ -1114,6 +1121,38 @@ void bt_input_mouse_send(uint8_t buttons, int8_t dx, int8_t dy, int8_t wheel, in
                  esp_err_to_name(ret), report_id, report_len, buttons, dx, dy, wheel, pan);
     }
     bt_input_unlock();
+}
+
+static bool bt_input_f15_send(bool pressed)
+{
+    if (!s_state.hid_connected || s_state.protocol_mode != ESP_HIDD_REPORT_MODE) {
+        ESP_LOGW(TAG, "F15 report dropped: hid=%d protocol=%u pressed=%d",
+                 s_state.hid_connected, s_state.protocol_mode, pressed);
+        return false;
+    }
+
+    bt_input_lock();
+    bt_hid_f15_report_build(s_state.key_report, pressed);
+    esp_err_t ret = esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, BT_HID_KEY_REPORT_ID,
+                                                  BT_HID_KEY_REPORT_SIZE, s_state.key_report);
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "F15 report send failed: %s pressed=%d", esp_err_to_name(ret), pressed);
+        bt_input_unlock();
+        return false;
+    }
+    ESP_LOGI(TAG, "F15 report %s", pressed ? "down" : "release");
+    bt_input_unlock();
+    return true;
+}
+
+void bt_input_f15_tap(void)
+{
+    if (!bt_input_f15_send(true)) {
+        return;
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(BT_HID_F15_TAP_MS));
+    (void)bt_input_f15_send(false);
 }
 
 void bt_input_hfp_mic_set_enabled(bool enabled)

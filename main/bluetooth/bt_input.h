@@ -32,6 +32,7 @@ uint32_t bt_input_hfp_pcm_sample_rate(void);
 void bt_input_set_discoverable(bool discoverable);
 void bt_input_clear_bonds(void);
 void bt_input_mouse_send(uint8_t buttons, int8_t dx, int8_t dy, int8_t wheel, int8_t pan);
+void bt_input_f15_tap(void);
 
 void bt_input_hfp_mic_set_enabled(bool enabled);
 void bt_input_hfp_audio_reset(void);

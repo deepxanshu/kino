@@ -14,6 +14,7 @@ extern "C" {
 #include "esp_system.h"
 
 #include "app_state.h"
+#include "button_action.h"
 #include "bt_input.h"
 #include "device_mode.h"
 #include "ui.h"
@@ -33,15 +34,17 @@ static void log_porta_levels(const char *stage)
 
 /**
  * @brief Handle Button Press.
- * 1. Click BtnA on Magic to toggle Mic and Joystick without changing page.
- * 2. Click BtnB to toggle Setup <-> Magic. BtnB is the only setup entry.
- * 3. Hold BtnB 3s to reopen pairing; hold BtnB 8s to clear bonds and reboot.
+ * 1. Click BtnA on Magic to toggle Mic and Joystick after the double-click window.
+ * 2. Double-click BtnA on Magic to enter Mic mode and send one F15 tap.
+ * 3. Click BtnB to toggle Setup <-> Magic. BtnB is the only setup entry.
+ * 4. Hold BtnB 3s to reopen pairing; hold BtnB 8s to clear bonds and reboot.
  */
 static void handle_button_press(void)
 {
     static bool wait_release = false;
     static bool btnb_pair_hold_done = false;
     static bool btnb_clear_hold_done = false;
+    static button_action_state_t btna_action = {};
     static TickType_t cooldown_until = 0;
 
     TickType_t now = xTaskGetTickCount();
@@ -77,20 +80,39 @@ static void handle_button_press(void)
         return;
     }
 
-    if (M5.BtnA.wasClicked()) {
-        uint8_t current_mode = app_state_get_mode();
-        ESP_LOGI(TAG, "BtnA click: mode=%s mic=%d joy=%d A_pressed=%d B_pressed=%d gpio37=%d gpio39=%d",
+    uint8_t current_mode = app_state_get_mode();
+    bool btna_clicked = M5.BtnA.wasClicked();
+    button_action_event_t action =
+        button_action_update(&btna_action, current_mode, btna_clicked,
+                             (uint32_t)(now * portTICK_PERIOD_MS));
+    if (btna_clicked) {
+        ESP_LOGI(TAG, "BtnA click pending: mode=%s mic=%d joy=%d A_pressed=%d B_pressed=%d gpio37=%d gpio39=%d",
                  device_mode_name(current_mode), device_mode_magic_mic_enabled(),
-                 device_mode_magic_joystick_enabled(), M5.BtnA.isPressed(),
-                 M5.BtnB.isPressed(), gpio_get_level(GPIO_NUM_37), gpio_get_level(GPIO_NUM_39));
+                 device_mode_magic_joystick_enabled(), M5.BtnA.isPressed(), M5.BtnB.isPressed(),
+                 gpio_get_level(GPIO_NUM_37), gpio_get_level(GPIO_NUM_39));
+    }
+    if (action == BUTTON_ACTION_BTNA_SINGLE) {
+        ESP_LOGI(TAG, "BtnA single commit: mode=%s mic=%d joy=%d",
+                 device_mode_name(current_mode), device_mode_magic_mic_enabled(),
+                 device_mode_magic_joystick_enabled());
         if (current_mode == MODE_RUNNING) {
             device_mode_toggle_magic_function();
         }
-        wait_release = true;
         return;
     }
+    if (action == BUTTON_ACTION_BTNA_DOUBLE_MIC_F15) {
+        ESP_LOGI(TAG, "BtnA double commit: mode=%s mic=%d joy=%d hid=%s",
+                 device_mode_name(current_mode), device_mode_magic_mic_enabled(),
+                 device_mode_magic_joystick_enabled(), bt_input_hid_status_text());
+        if (current_mode == MODE_RUNNING && device_mode_set_magic_mic_enabled(true)) {
+            bt_input_f15_tap();
+        }
+        return;
+    }
+
     if (M5.BtnB.wasClicked()) {
-        uint8_t current_mode = app_state_get_mode();
+        button_action_reset(&btna_action);
+        current_mode = app_state_get_mode();
         uint8_t screen_mode = device_mode_next_setup(current_mode);
         ESP_LOGI(TAG, "BtnB click: mode=%s target=%s A_pressed=%d B_pressed=%d gpio37=%d gpio39=%d",
                  device_mode_name(current_mode), device_mode_name(screen_mode), M5.BtnA.isPressed(),

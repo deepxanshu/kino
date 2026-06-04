@@ -1,5 +1,6 @@
 set(SOURCES
     app_state.c
+    button_action.c
     device_mode.c
     bluetooth/bt_pairing_status.c
     bluetooth/bt_hid_mouse.c
