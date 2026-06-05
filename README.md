@@ -46,6 +46,18 @@ Magic Stick
 | Shortcut | BtnA double-click sends macOS `F15` after mode switching |
 | Hardware safety | JoyC and mic are never active on PortA at the same time |
 
+## Demo Video
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=XLn45-vdkQ8">
+    <img alt="Magic Stick demo video" src="https://img.youtube.com/vi/XLn45-vdkQ8/maxresdefault.jpg" width="720">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=XLn45-vdkQ8">Watch the Magic Stick demo on YouTube</a>
+</p>
+
 ## Gallery
 
 <p align="center">
