@@ -9,6 +9,7 @@
   <img alt="Target" src="https://img.shields.io/badge/Target-ESP32--PICO--D4-2E8B57?style=for-the-badge">
   <img alt="Bluetooth" src="https://img.shields.io/badge/Classic_BT-HID_Mouse_%2B_HFP_Mic-2563EB?style=for-the-badge">
   <img alt="UI" src="https://img.shields.io/badge/UI-Retro_Scope-111827?style=for-the-badge">
+  <a href="https://www.hackster.io/xuruirayz/magic-stick-0fc887"><img alt="Hackster project" src="https://img.shields.io/badge/Hackster.io-Magic_Stick-2E9AFE?style=for-the-badge"></a>
 </p>
 
 <p align="center">
@@ -18,6 +19,8 @@
 ---
 
 `Magic Stick` is firmware for an **M5StickC-Plus + JoyC HAT** that turns a tiny handheld device into a Bluetooth input companion:
+
+> Competition project page: [Magic Stick on Hackster.io](https://www.hackster.io/xuruirayz/magic-stick-0fc887)
 
 - JoyC controls the computer mouse.
 - JoyC click sends left click.
