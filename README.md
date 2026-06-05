@@ -80,13 +80,9 @@ Magic Stick
 
 ### Magic Function States
 
-```mermaid
-flowchart LR
-    A["Mic off / Joystick on"] -->|"BtnA single or double"| B["Mic on / Joystick off"]
-    B -->|"BtnA single or double"| A
-    A -->|"BtnA double"| C["Send F15"]
-    B -->|"BtnA double"| C
-```
+<p align="center">
+  <img alt="Magic function states diagram" src="docs/assets/readme-magic-function-states.png">
+</p>
 
 When joystick is on:
 
