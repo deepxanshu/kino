@@ -37,7 +37,8 @@ static agent_status_t status_from_char(char c)
     }
 }
 
-// Parse "@A|name~S|name~S|..." (line is mutated by strtok_r).
+// Parse "@A|name~S~id|name~S~id|..." (line is mutated by strtok_r).
+// id (the Codex conversationId) is optional; older frames without it still parse.
 static void parse_frame(char *line)
 {
     if (strncmp(line, "@A", 2) != 0) {
@@ -49,16 +50,25 @@ static void parse_frame(char *line)
     char *save = NULL;
     char *tok = strtok_r(line, "|", &save);  // first token: "@A"
     while ((tok = strtok_r(NULL, "|", &save)) != NULL && count < AGENTS_MAX) {
-        char *tilde = strchr(tok, '~');
-        if (tilde == NULL || tilde == tok) {
+        char *t1 = strchr(tok, '~');
+        if (t1 == NULL || t1 == tok) {
             continue;
         }
-        *tilde = '\0';
+        *t1 = '\0';
         const char *name = tok;
-        char sc = *(tilde + 1);
+        char *rest = t1 + 1;  // "S" or "S~id"
+        char sc = rest[0];
+        const char *id = "";
+        char *t2 = strchr(rest, '~');
+        if (t2 != NULL) {
+            *t2 = '\0';
+            id = t2 + 1;
+        }
         strncpy(sessions[count].name, name, AGENT_NAME_LEN - 1);
         sessions[count].name[AGENT_NAME_LEN - 1] = '\0';
         sessions[count].status = status_from_char(sc);
+        strncpy(sessions[count].id, id, AGENT_ID_LEN - 1);
+        sessions[count].id[AGENT_ID_LEN - 1] = '\0';
         count++;
     }
 

@@ -26,10 +26,12 @@ typedef enum {
 
 #define AGENTS_MAX 12
 #define AGENT_NAME_LEN 20
+#define AGENT_ID_LEN 40  // Codex conversationId (UUID) used for the codex:// deep link
 
 typedef struct {
     char name[AGENT_NAME_LEN];
     agent_status_t status;
+    char id[AGENT_ID_LEN];  // conversationId; empty for demo entries
 } agent_session_t;
 
 // Call once at startup (creates the internal lock) before any get/set.

@@ -11,11 +11,11 @@
 // kino: demo data used until the Mac companion streams real sessions over serial.
 // Mirrors the mockup so the on-device page matches what we designed.
 static const agent_session_t s_demo[] = {
-    {"kino-fw", AGENT_STATUS_ATTENTION},
-    {"bleu-api", AGENT_STATUS_RUNNING},
-    {"site-brief", AGENT_STATUS_RUNNING},
-    {"granola", AGENT_STATUS_IDLE},
-    {"deploy", AGENT_STATUS_ERROR},
+    {"kino-fw", AGENT_STATUS_ATTENTION, ""},
+    {"bleu-api", AGENT_STATUS_RUNNING, ""},
+    {"site-brief", AGENT_STATUS_RUNNING, ""},
+    {"granola", AGENT_STATUS_IDLE, ""},
+    {"deploy", AGENT_STATUS_ERROR, ""},
 };
 
 static agent_session_t s_live[AGENTS_MAX];

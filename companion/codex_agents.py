@@ -139,12 +139,15 @@ STATUS_CHAR = {"running": "R", "attention": "W", "error": "E", "idle": "I"}
 
 
 def frame(rows, limit=7):
-    """Build one '@A|name~S|name~S|...' serial line for the device."""
+    """Build one '@A|name~S~id|name~S~id|...' serial line for the device.
+    id = full Codex conversationId, sent back by the device on select so we can
+    fire `open codex://threads/<id>` to focus that thread."""
     parts = ["@A"]
     for r in rows[:limit]:
         short = r["thread"][-4:]
         name = f"{r['project']} {short}".replace("|", "").replace("~", "")[:AGENT_NAME_LEN - 1]
-        parts.append(f"{name}~{STATUS_CHAR.get(r['status'], 'I')}")
+        tid = r["thread"].replace("|", "").replace("~", "")
+        parts.append(f"{name}~{STATUS_CHAR.get(r['status'], 'I')}~{tid}")
     return "|".join(parts) + "\n"
 
 
@@ -173,9 +176,13 @@ def serial_mode(argv):
         print("no serial port found (plug in the stick)")
         sys.exit(1)
 
+    import threading
+    import subprocess
+
     ser = serial.Serial()
     ser.port = port
     ser.baudrate = 115200
+    ser.timeout = 0.3
     ser.dtr = False
     ser.rts = False
     ser.open()
@@ -186,11 +193,33 @@ def serial_mode(argv):
         pass
     print(f"streaming Codex chats to {port} @115200 (Ctrl-C to stop)")
 
+    # Reader thread: the device sends "@SEL <conversationId>" when you select a
+    # thread; fire the codex:// deep link to focus that thread in the Codex app.
+    def reader():
+        buf = b""
+        while True:
+            try:
+                chunk = ser.read(128)
+            except Exception:
+                break
+            if not chunk:
+                continue
+            buf += chunk
+            while b"\n" in buf:
+                ln, buf = buf.split(b"\n", 1)
+                s = ln.decode("utf-8", errors="ignore").strip()
+                if s.startswith("@SEL "):
+                    tid = s[5:].strip()
+                    if tid:
+                        print("focus thread:", tid)
+                        subprocess.run(["open", f"codex://threads/{tid}"], check=False)
+
+    threading.Thread(target=reader, daemon=True).start()
+
     while True:
         rows, _, _ = derive()
         line = frame(rows)
         ser.write(line.encode())
-        print("sent:", line.strip())
         time.sleep(1.5)
 
 
