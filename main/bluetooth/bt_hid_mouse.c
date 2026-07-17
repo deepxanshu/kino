@@ -48,8 +48,19 @@ static uint8_t s_hid_mouse_descriptor[] = {
     0x05, 0x01,        // USAGE_PAGE (Generic Desktop)
     0x09, 0x06,        // USAGE (Keyboard)
     0xa1, 0x01,        // COLLECTION (Application)
-    0x85, BT_HID_KEY_REPORT_ID,  // REPORT_ID (F15 key)
+    0x85, BT_HID_KEY_REPORT_ID,  // REPORT_ID (dictation/escape key)
+    // kino: modifier bitmap byte (LeftCtrl..RightGUI), standard boot-keyboard
+    // layout. Needed so we can send e.g. Ctrl+F13 -- Wispr Flow (and most
+    // hotkey pickers) reject a bare function key with no modifier.
     0x05, 0x07,        //   USAGE_PAGE (Keyboard/Keypad)
+    0x19, 0xe0,        //   USAGE_MINIMUM (Keyboard LeftControl)
+    0x29, 0xe7,        //   USAGE_MAXIMUM (Keyboard RightGUI)
+    0x15, 0x00,        //   LOGICAL_MINIMUM (0)
+    0x25, 0x01,        //   LOGICAL_MAXIMUM (1)
+    0x75, 0x01,        //   REPORT_SIZE (1)
+    0x95, 0x08,        //   REPORT_COUNT (8)
+    0x81, 0x02,        //   INPUT (Data,Var,Abs)
+    // keycode byte (single active key, array style)
     0x19, 0x00,        //   USAGE_MINIMUM (Reserved)
     0x2a, 0xff, 0x00,  //   USAGE_MAXIMUM (Keyboard usage 0xff)
     0x15, 0x00,        //   LOGICAL_MINIMUM (0)
@@ -81,11 +92,14 @@ esp_hidd_qos_param_t *bt_hid_mouse_qos_param(void)
     return &s_hid_qos;
 }
 
-void bt_hid_f15_report_build(uint8_t report[BT_HID_KEY_REPORT_SIZE], bool pressed)
+// kino: generic modifier+keycode keyboard report (used for the Ctrl+F13 dictation
+// trigger and the bare Escape cancel key)
+void bt_hid_key_report_build(uint8_t report[BT_HID_KEY_REPORT_SIZE], uint8_t modifiers, uint8_t usage, bool pressed)
 {
     if (report == NULL) {
         return;
     }
 
-    report[0] = pressed ? BT_HID_F15_USAGE : 0x00;
+    report[0] = pressed ? modifiers : 0x00;
+    report[1] = pressed ? usage : 0x00;
 }

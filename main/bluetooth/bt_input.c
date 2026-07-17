@@ -1123,36 +1123,51 @@ void bt_input_mouse_send(uint8_t buttons, int8_t dx, int8_t dy, int8_t wheel, in
     bt_input_unlock();
 }
 
-static bool bt_input_f15_send(bool pressed)
+// kino: send an arbitrary modifier+keycode combo. Used for the dictation
+// trigger (Ctrl+F13) and Escape (cancel) -- one code path instead of a
+// per-key send function.
+static bool bt_input_key_send(uint8_t modifiers, uint8_t usage, bool pressed)
 {
     if (!s_state.hid_connected || s_state.protocol_mode != ESP_HIDD_REPORT_MODE) {
-        ESP_LOGW(TAG, "F15 report dropped: hid=%d protocol=%u pressed=%d",
-                 s_state.hid_connected, s_state.protocol_mode, pressed);
+        ESP_LOGW(TAG, "key report dropped: hid=%d protocol=%u mod=0x%02x usage=0x%02x pressed=%d",
+                 s_state.hid_connected, s_state.protocol_mode, modifiers, usage, pressed);
         return false;
     }
 
     bt_input_lock();
-    bt_hid_f15_report_build(s_state.key_report, pressed);
+    bt_hid_key_report_build(s_state.key_report, modifiers, usage, pressed);
     esp_err_t ret = esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, BT_HID_KEY_REPORT_ID,
                                                   BT_HID_KEY_REPORT_SIZE, s_state.key_report);
     if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "F15 report send failed: %s pressed=%d", esp_err_to_name(ret), pressed);
+        ESP_LOGW(TAG, "key report send failed: %s mod=0x%02x usage=0x%02x pressed=%d", esp_err_to_name(ret),
+                 modifiers, usage, pressed);
         bt_input_unlock();
         return false;
     }
-    ESP_LOGI(TAG, "F15 report %s", pressed ? "down" : "release");
+    ESP_LOGI(TAG, "key report mod=0x%02x usage=0x%02x %s", modifiers, usage, pressed ? "down" : "release");
     bt_input_unlock();
     return true;
 }
 
-void bt_input_f15_tap(void)
+void bt_input_dictation_tap(void)
 {
-    if (!bt_input_f15_send(true)) {
+    // kino: Ctrl+F5, matching Deepanshu's existing Wispr Flow shortcut.
+    if (!bt_input_key_send(BT_HID_MOD_LEFT_CTRL, BT_HID_F5_USAGE, true)) {
         return;
     }
 
     vTaskDelay(pdMS_TO_TICKS(BT_HID_F15_TAP_MS));
-    (void)bt_input_f15_send(false);
+    (void)bt_input_key_send(BT_HID_MOD_LEFT_CTRL, BT_HID_F5_USAGE, false);
+}
+
+void bt_input_escape_tap(void)
+{
+    if (!bt_input_key_send(0, BT_HID_ESC_USAGE, true)) {
+        return;
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(BT_HID_F15_TAP_MS));
+    (void)bt_input_key_send(0, BT_HID_ESC_USAGE, false);
 }
 
 void bt_input_hfp_mic_set_enabled(bool enabled)
