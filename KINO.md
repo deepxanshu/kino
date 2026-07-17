@@ -108,14 +108,18 @@ Host-side logic tests (no hardware): `cc -I main -I main/joystick test/test_<x>.
 ## Roadmap / ideas (not built)
 
 **Near-term (reuse the pipeline we have):**
-- **Stabilize the Codex thread-switcher (IN PROGRESS — parked).** The *mechanism is proven*: running
-  `open "codex://threads/<conversationId>"` in a terminal foregrounds the Codex app (ChatGPT.app,
-  bundle `com.openai.codex`) — that's the "command sent when you click a thread". The full chain is
-  wired (device sends `@SEL <id>` over serial → companion runs `open codex://...`). **Blocker:** the
-  stick resets / drops off USB whenever the companion opens or closes the serial port (DTR/RTS
-  toggle), so the back-channel is unreliable and validation kept failing. **Fix:** open the port
-  *without* asserting DTR/RTS so the device doesn't reset (`stty -f <port> -clocal -hupcl` before
-  open, or pyserial `dsrdtr`/manual line control), then validate press → `@SEL` → `open` end-to-end.
+- **Codex thread-switcher — validating.** Mechanism proven (`open "codex://threads/<id>"` foregrounds
+  the app). Chain wired: device sends `@SEL <id>` over serial → companion runs `open codex://...`.
+  Reset-churn fix now IN: the companion opens with DTR/RTS deasserted and disables HUPCL so the stick
+  no longer reboots on connect/disconnect. Firmware fix IN: both the joystick press and a BtnA click
+  fire the focus. **Left:** confirm press → `@SEL` → thread focuses, end-to-end on device.
+- **Diagnose blinking / joystick drops.** Reported: screen blinks randomly, joystick sometimes stops.
+  Storage/flash is fine (app uses ~74% of its partition). A tethered capture showed only ONE clean
+  POWERON reset (no crash loop / brownout in that window). Leading hypothesis: **brownout reboots on
+  battery** — BT-TX + LCD current spikes dip the ~120mAh cell below the brownout threshold, resetting
+  the ESP (screen blink + joystick reset). Also possible: JoyC I2C freeze (recovery exists). Next:
+  capture serial while it happens and read `reset_reason`/`rst:` (brownout vs panic vs clean); if
+  brownout, lower LCD brightness / BT-TX power or keep it charged.
 - **Messages page (voice-reply to iMessage).** Same architecture as the Agents page: companion reads
   `~/Library/Messages/chat.db` (needs Full Disk Access, read-only) → streams recent/unread threads to
   a new "Messages" screen → select a thread → companion focuses that conversation (AppleScript) →

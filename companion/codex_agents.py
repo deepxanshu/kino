@@ -183,14 +183,23 @@ def serial_mode(argv):
     ser.port = port
     ser.baudrate = 115200
     ser.timeout = 0.3
-    ser.dtr = False
-    ser.rts = False
+    ser.dtr = False   # keep the ESP32 auto-reset lines deasserted so opening
+    ser.rts = False   # the port doesn't reboot the stick
     ser.open()
     try:
         ser.dtr = False
         ser.rts = False
     except Exception:
         pass
+    # Disable hangup-on-close (HUPCL) so quitting/killing the companion doesn't
+    # toggle DTR and reset the stick -- this was the main source of reset churn.
+    try:
+        import termios
+        attrs = termios.tcgetattr(ser.fd)
+        attrs[2] &= ~termios.HUPCL
+        termios.tcsetattr(ser.fd, termios.TCSANOW, attrs)
+    except Exception as e:
+        print("note: could not disable HUPCL:", e)
     print(f"streaming Codex chats to {port} @115200 (Ctrl-C to stop)")
 
     # Reader thread: the device sends "@SEL <conversationId>" when you select a
