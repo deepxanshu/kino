@@ -104,8 +104,22 @@ Host-side logic tests (no hardware): `cc -I main -I main/joystick test/test_<x>.
 
 ## Roadmap / ideas (not built)
 
-- **F13–F24 programmable palette** — on-screen strip of buttons, each sending a bindable key
-  (macOS Shortcuts / Raycast). Touch-Bar-style, most flexible; smallest firmware lift.
-- **Media / meeting pages** — play-pause, volume slider (JoyC tilt), mute/camera toggle — needs an
-  added HID consumer-control report.
-- **Agent-state visualization** — the longer-term goal: show/act on coding-agent status on the screen.
+**Near-term (reuse the pipeline we have):**
+- **Messages page (voice-reply to iMessage).** Same architecture as the Agents page: companion reads
+  `~/Library/Messages/chat.db` (needs Full Disk Access, read-only) → streams recent/unread threads to
+  a new "Messages" screen → select a thread → companion focuses that conversation (AppleScript) →
+  existing voice flow dictates the reply → single-click sends. "Clicky intelligence" (Claude-drafted
+  quick replies) is a layer added later on top of the plumbing.
+- **Remote page (IR).** The StickC Plus has a **built-in IR LED** → a fully on-device TV/AC/light
+  remote as a 4th screen in the BtnB cycle; scroll IR commands with the JoyC, press to fire. No
+  companion/network needed. (WiFi/smart-home — HomeKit, smart bulbs — is a separate, harder path
+  needing network + per-vendor APIs; do IR first.)
+- **Real Mac-side thread focus on Agents select** — currently select just jumps to the home page;
+  actually switching the Codex thread needs the companion to script/deep-link the Codex app.
+- **Auto-start the companion** — a launchd/login item so the live feed is always on.
+
+**Later:**
+- **F13–F24 programmable palette** — on-screen strip of bindable keys (macOS Shortcuts / Raycast).
+- **Media / meeting pages** — play-pause, volume slider (JoyC tilt), mute/camera toggle (needs an HID
+  consumer-control report).
+- **Richer agent status** — live running/done via `logs_2.sqlite`; extend beyond Codex (e.g. Claude).
