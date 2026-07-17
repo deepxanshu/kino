@@ -34,8 +34,9 @@ static void log_porta_levels(const char *stage)
 
 /**
  * @brief Handle Button Press.
- * 1. Click BtnA on Magic to toggle Mic and Joystick after the double-click window.
- * 2. Double-click BtnA on Magic to toggle Mic/Joystick and send one F15 tap.
+ * 1. Click BtnA on Magic to toggle the device mic on/off (joystick pauses while mic is on --
+ *    shared PortA) and send one Ctrl+F5 tap (Wispr Flow start/stop).
+ * 2. Click BtnPWR (side power button) on Magic to send Escape and force mic off (cancel dictation).
  * 3. Click BtnB to toggle Setup <-> Magic. BtnB is the only setup entry.
  * 4. Hold BtnB 3s to reopen pairing; hold BtnB 8s to clear bonds and reboot.
  */
@@ -44,7 +45,6 @@ static void handle_button_press(void)
     static bool wait_release = false;
     static bool btnb_pair_hold_done = false;
     static bool btnb_clear_hold_done = false;
-    static button_action_state_t btna_action = {};
     static TickType_t cooldown_until = 0;
 
     TickType_t now = xTaskGetTickCount();
@@ -81,37 +81,32 @@ static void handle_button_press(void)
     }
 
     uint8_t current_mode = app_state_get_mode();
-    bool btna_clicked = M5.BtnA.wasClicked();
-    button_action_event_t action =
-        button_action_update(&btna_action, current_mode, btna_clicked,
-                             (uint32_t)(now * portTICK_PERIOD_MS));
-    if (btna_clicked) {
-        ESP_LOGI(TAG, "BtnA click pending: mode=%s mic=%d joy=%d A_pressed=%d B_pressed=%d gpio37=%d gpio39=%d",
+    // kino: single-tap BtnA = toggle the device's own mic on/off AND fire the
+    // Wispr trigger (Ctrl+F5). Tap once -> device mic ON (joystick pauses --
+    // shared PortA/GPIO0) + Wispr starts; tap again -> mic OFF, joystick back,
+    // Wispr stops+pastes. Select "Magic Stick" as the input in Wispr/macOS Sound.
+    if (M5.BtnA.wasClicked()) {
+        ESP_LOGI(TAG, "BtnA click: toggle mic + Ctrl-F5 mode=%s mic=%d hid=%s",
                  device_mode_name(current_mode), device_mode_magic_mic_enabled(),
-                 device_mode_magic_joystick_enabled(), M5.BtnA.isPressed(), M5.BtnB.isPressed(),
-                 gpio_get_level(GPIO_NUM_37), gpio_get_level(GPIO_NUM_39));
-    }
-    if (action == BUTTON_ACTION_BTNA_SINGLE) {
-        ESP_LOGI(TAG, "BtnA single commit: mode=%s mic=%d joy=%d",
-                 device_mode_name(current_mode), device_mode_magic_mic_enabled(),
-                 device_mode_magic_joystick_enabled());
-        if (current_mode == MODE_RUNNING) {
-            device_mode_toggle_magic_function();
+                 bt_input_hid_status_text());
+        if (current_mode == MODE_RUNNING && device_mode_toggle_magic_function()) {
+            bt_input_dictation_tap();
         }
         return;
     }
-    if (action == BUTTON_ACTION_BTNA_DOUBLE_TOGGLE_F15) {
-        ESP_LOGI(TAG, "BtnA double commit: mode=%s mic=%d joy=%d hid=%s",
-                 device_mode_name(current_mode), device_mode_magic_mic_enabled(),
-                 device_mode_magic_joystick_enabled(), bt_input_hid_status_text());
-        if (current_mode == MODE_RUNNING && device_mode_toggle_magic_function()) {
-            bt_input_f15_tap();
+    // kino: BtnPWR (side power button) click = Escape (cancel dictation) and
+    // force back to Joystick mode, so cancel doesn't need a long hold.
+    if (M5.BtnPWR.wasClicked()) {
+        ESP_LOGI(TAG, "BtnPWR click: Escape+restore cursor mode=%s mic=%d",
+                 device_mode_name(current_mode), device_mode_magic_mic_enabled());
+        if (current_mode == MODE_RUNNING) {
+            bt_input_escape_tap();
+            device_mode_set_magic_mic_enabled(false);
         }
         return;
     }
 
     if (M5.BtnB.wasClicked()) {
-        button_action_reset(&btna_action);
         current_mode = app_state_get_mode();
         uint8_t screen_mode = device_mode_next_setup(current_mode);
         ESP_LOGI(TAG, "BtnB click: mode=%s target=%s A_pressed=%d B_pressed=%d gpio37=%d gpio39=%d",
