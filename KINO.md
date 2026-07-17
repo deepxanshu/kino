@@ -26,7 +26,7 @@ This file is the running log so nothing gets lost as it grows.
 | JoyC click, then hold & move (<450 ms window) | Scroll / pan |
 | **BtnA double-tap** | Start voice dictation (device mic on + Ctrl+F5) |
 | **BtnA single-tap** | Enter/send; if dictating, first stops voice (Ctrl+F5 paste) then sends. On Agents page: select thread → jump home |
-| **BtnPWR (side button) tap** | **Escape** (cancel dictation + mic off) |
+| **BtnPWR (side button)** | tap = **Escape** (cancel + mic off) · **hold = deep sleep** (press power btn to wake) · ~6s hold = hardware power off |
 | BtnB tap | Cycle screens: Setup → Magic → **Agents** → Setup |
 | **Agents page** | JoyC ↑/↓ = move selection · press = focus session · status dots (run/wait/idle/err) |
 | BtnB hold 3 s / 8 s | Re-pair / clear bonds + reboot |

@@ -38,7 +38,8 @@ static void log_porta_levels(const char *stage)
  * @brief Handle Button Press.
  * 1. BtnA double tap = start voice (device mic + Ctrl+F5). BtnA single tap = Enter;
  *    if voice is active, single tap stops it (Ctrl+F5 paste) then sends Enter.
- * 2. Click BtnPWR (side power button) = Escape (cancel dictation + mic off).
+ * 2. BtnPWR (side power button): click = Escape (cancel dictation + mic off);
+ *    hold = deep sleep (press power button to wake). ~6s hold = hardware power off.
  * 3. Click BtnB to cycle screens Setup -> Magic -> Agents.
  * 4. Hold BtnB 3s to reopen pairing; hold BtnB 8s to clear bonds and reboot.
  */
@@ -83,6 +84,18 @@ static void handle_button_press(void)
     }
 
     uint8_t current_mode = app_state_get_mode();
+
+    // kino: HOLD BtnPWR (side button) = deep sleep to save battery. Screen off +
+    // ESP32 deep sleep; press the power button to wake (device reboots and
+    // reconnects). Works from any screen. Single-click stays Escape (below).
+    if (M5.BtnPWR.wasHold()) {
+        ESP_LOGW(TAG, "BtnPWR hold: entering deep sleep (press power button to wake)");
+        M5.Display.sleep();
+        vTaskDelay(pdMS_TO_TICKS(80));
+        M5.Power.deepSleep();  // does not return; wakes via power-button reset
+        return;
+    }
+
     // kino: BtnA double tap = START voice (device mic on + Ctrl+F5). BtnA single
     // tap = Enter; and if voice is active, single tap ALSO stops it first (Ctrl+F5
     // to make Wispr paste) then sends Enter -- so "double to talk, single to
