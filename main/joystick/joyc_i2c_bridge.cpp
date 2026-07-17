@@ -157,7 +157,23 @@ extern "C" bool joyc_i2c_recover(bool power_cycle)
              power_cycle, s_ready, s_backend, gpio_get_level(GPIO_NUM_0), gpio_get_level(GPIO_NUM_26));
     release_backend();
     recover_bus_lines(power_cycle);
-    return joyc_i2c_begin();
+    if (joyc_i2c_begin()) {
+        return true;
+    }
+
+    // kino: the JoyC MCU can hang while leaving the bus lines idle (both high).
+    // recover_bus_lines() only power-cycles when the bus looks stuck, so in that
+    // case it never resets the JoyC and the probe fails forever -- the "joystick
+    // frozen until I restart" bug. If a power-cycle was requested but the probe
+    // still failed, force a real PortA power-cycle to hard-reset the JoyC MCU and
+    // probe once more.
+    if (power_cycle) {
+        ESP_LOGW(TAG, "recover: probe failed with idle bus, forcing PortA power-cycle");
+        power_cycle_porta();
+        pulse_i2c_bus();
+        return joyc_i2c_begin();
+    }
+    return false;
 }
 
 extern "C" void joyc_i2c_release(void)

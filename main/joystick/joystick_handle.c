@@ -27,7 +27,10 @@ static SemaphoreHandle_t s_joystick_i2c_lock;
 #define JOY_MOUSE_LOG_MS 250
 #define JOY_READ_FAIL_LOG_MS 1000
 #define JOY_RECOVER_RETRY_MS 2500
-#define JOY_STUCK_RECOVER_RETRY_MS 30000
+// kino: was 30000 -- a 30s backoff after a stuck-latch felt like a permanent
+// freeze during active use. 5s lets it self-heal quickly (recovery now force
+// power-cycles the JoyC, so retrying sooner actually fixes it).
+#define JOY_STUCK_RECOVER_RETRY_MS 5000
 #define JOY_STUCK_FAST_ATTEMPTS 2
 #define JOY_READ_FAILS_BEFORE_RELEASE 3
 
