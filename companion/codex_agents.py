@@ -135,7 +135,69 @@ def fmt_ago(epoch):
     return f"{s // 86400}d ago"
 
 
+STATUS_CHAR = {"running": "R", "attention": "W", "error": "E", "idle": "I"}
+
+
+def frame(rows, limit=7):
+    """Build one '@A|name~S|name~S|...' serial line for the device."""
+    parts = ["@A"]
+    for r in rows[:limit]:
+        short = r["thread"][-4:]
+        name = f"{r['project']} {short}".replace("|", "").replace("~", "")[:AGENT_NAME_LEN - 1]
+        parts.append(f"{name}~{STATUS_CHAR.get(r['status'], 'I')}")
+    return "|".join(parts) + "\n"
+
+
+AGENT_NAME_LEN = 20
+
+
+def find_port():
+    hits = glob.glob("/dev/cu.usbserial-*") + glob.glob("/dev/cu.wchusbserial*") + glob.glob("/dev/cu.usbmodem*")
+    return hits[0] if hits else None
+
+
+def serial_mode(argv):
+    try:
+        import serial
+    except ImportError:
+        print("pyserial not installed. Run: pip3 install pyserial  (or use the esp-idf env python)")
+        sys.exit(1)
+
+    port = None
+    for i, a in enumerate(argv):
+        if a == "--serial" and i + 1 < len(argv) and not argv[i + 1].startswith("-"):
+            port = argv[i + 1]
+    if port is None:
+        port = find_port()
+    if port is None:
+        print("no serial port found (plug in the stick)")
+        sys.exit(1)
+
+    ser = serial.Serial()
+    ser.port = port
+    ser.baudrate = 115200
+    ser.dtr = False
+    ser.rts = False
+    ser.open()
+    try:
+        ser.dtr = False
+        ser.rts = False
+    except Exception:
+        pass
+    print(f"streaming Codex chats to {port} @115200 (Ctrl-C to stop)")
+
+    while True:
+        rows, _, _ = derive()
+        line = frame(rows)
+        ser.write(line.encode())
+        print("sent:", line.strip())
+        time.sleep(1.5)
+
+
 def main():
+    if "--serial" in sys.argv:
+        serial_mode(sys.argv)
+        return
     raw = "--raw" in sys.argv
     rows, running, queued = derive()
 

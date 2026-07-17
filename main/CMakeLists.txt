@@ -1,6 +1,7 @@
 set(SOURCES
     app_state.c
     agents_model.c
+    agents_serial.c
     button_action.c
     device_mode.c
     bluetooth/bt_pairing_status.c

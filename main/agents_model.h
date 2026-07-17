@@ -32,7 +32,15 @@ typedef struct {
     agent_status_t status;
 } agent_session_t;
 
+// Call once at startup (creates the internal lock) before any get/set.
+void agents_model_init(void);
+
+// Replace the live session list (called by the serial reader when the Mac
+// companion sends an update). Until the first set() call, get() returns demo data.
+void agents_model_set(const agent_session_t *sessions, size_t count);
+
 // Copies the current sessions into `out` (capacity `max`), returns the count.
+// Returns live serial data once any has arrived, otherwise the demo list.
 size_t agents_model_get(agent_session_t *out, size_t max);
 
 #ifdef __cplusplus
