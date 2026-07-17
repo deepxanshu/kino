@@ -17,6 +17,8 @@
 #include "joyc_button.h"
 #include "joyc_i2c_bridge.h"
 #include "mouse_controller.h"
+#include "../agents_model.h"
+#include "../ui/ui_agents_screen.h"
 #include <inttypes.h>
 
 static SemaphoreHandle_t s_joystick_i2c_lock;
@@ -449,5 +451,86 @@ void handle_running_screen(void *pvParam)
             mouse_mode_active = false;
             vTaskDelay(200 / portTICK_PERIOD_MS);
         }
+    }
+}
+
+// kino: Agents page -- navigate the session list with the JoyC.
+//   Push up/down = move the selection (auto-repeats while held).
+//   Press = focus the selected session (Phase 2: logs; Phase 4: sends to Mac).
+#define AGENTS_NAV_THRESHOLD 900
+#define AGENTS_NAV_REPEAT_MS 300
+#define AGENTS_POLL_MS       30
+#define AGENTS_UI_REFRESH_MS 80
+
+void handle_agents_screen(void *pvParam)
+{
+    (void)pvParam;
+    int selected = 0;
+    bool nav_deflected = false;
+    bool last_pressed = false;
+    TickType_t last_step = 0;
+    TickType_t last_ui = 0;
+    agent_session_t sessions[AGENTS_MAX];
+
+    while (1) {
+        if (app_state_get_mode() != MODE_AGENTS) {
+            vTaskDelay(pdMS_TO_TICKS(200));
+            continue;
+        }
+        if (device_mode_peripheral_switching()) {
+            vTaskDelay(pdMS_TO_TICKS(50));
+            continue;
+        }
+        if (!joystick_is_ready()) {
+            joystick_recover_if_due("agents JoyC not ready");
+        }
+
+        size_t count = agents_model_get(sessions, AGENTS_MAX);
+        if (selected >= (int)count) {
+            selected = count > 0 ? (int)count - 1 : 0;
+        }
+        if (selected < 0) {
+            selected = 0;
+        }
+
+        uint16_t joy_x = X_CENTER;
+        uint16_t joy_y = Y_CENTER;
+        bool joy_pressed = false;
+        joystick_read_state(&joy_x, &joy_y, &joy_pressed);
+
+        TickType_t now = xTaskGetTickCount();
+        int dir = 0;
+        if (joy_y > Y_CENTER + AGENTS_NAV_THRESHOLD) {
+            dir = -1;  // push up -> selection up
+        } else if (joy_y < Y_CENTER - AGENTS_NAV_THRESHOLD) {
+            dir = 1;   // push down -> selection down
+        }
+        if (dir != 0 && count > 0) {
+            bool due = !nav_deflected || (now - last_step) >= pdMS_TO_TICKS(AGENTS_NAV_REPEAT_MS);
+            if (due) {
+                selected += dir;
+                if (selected < 0) {
+                    selected = 0;
+                }
+                if (selected >= (int)count) {
+                    selected = (int)count - 1;
+                }
+                last_step = now;
+            }
+            nav_deflected = true;
+        } else {
+            nav_deflected = false;
+        }
+
+        if (joy_pressed && !last_pressed && count > 0) {
+            ESP_LOGI(TAG, "agents focus: %s", sessions[selected].name);
+        }
+        last_pressed = joy_pressed;
+
+        if ((now - last_ui) >= pdMS_TO_TICKS(AGENTS_UI_REFRESH_MS)) {
+            update_agents_screen(sessions, count, selected);
+            last_ui = now;
+        }
+        vTaskDelay(pdMS_TO_TICKS(AGENTS_POLL_MS));
     }
 }

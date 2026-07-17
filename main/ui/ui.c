@@ -8,6 +8,7 @@
 #include "esp_log.h"
 #include "ui_setup_screen.h"
 #include "ui_running_screen.h"
+#include "ui_agents_screen.h"
 
 typedef void (*ui_screen_action_t)(void);
 typedef bool (*ui_screen_check_t)(void);
@@ -63,6 +64,9 @@ void switch_screen(int screen_id)
     } else if (screen_id == MODE_RUNNING) {
         load_screen("Running", create_running_screen, ui_running_screen_is_ready,
                     ui_running_screen_load, ui_running_screen_destory);
+    } else if (screen_id == MODE_AGENTS) {
+        load_screen("Agents", create_agents_screen, ui_agents_screen_is_ready,
+                    ui_agents_screen_load, ui_agents_screen_destory);
     } else {
         ESP_LOGE("UI", "Invalid screen mode!");
     }

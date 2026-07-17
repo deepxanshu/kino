@@ -1,5 +1,6 @@
 set(SOURCES
     app_state.c
+    agents_model.c
     button_action.c
     device_mode.c
     bluetooth/bt_pairing_status.c
@@ -14,6 +15,7 @@ set(SOURCES
     mic/mic_handle.cpp
     ui/ui_running_screen.c
     ui/ui_setup_screen.c
+    ui/ui_agents_screen.c
     ui/ui_theme.c
     ui/ui.c
     lvgl_port.cpp

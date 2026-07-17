@@ -169,6 +169,7 @@ void app_main(void)
 
     xTaskCreate(handle_setup_screen, "handle_setup_screen", 8192, NULL, 5, NULL);      // handle setup mode
     xTaskCreate(handle_running_screen, "handle_running_screen", 8192, NULL, 5, NULL);  // handle running mode
+    xTaskCreate(handle_agents_screen, "handle_agents_screen", 8192, NULL, 5, NULL);    // kino: agents page
     xTaskCreate(handle_mic_screen, "handle_mic_screen", 8192, NULL, 5, NULL);
 
     while (1) {

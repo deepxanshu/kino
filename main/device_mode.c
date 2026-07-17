@@ -44,6 +44,8 @@ const char *device_mode_name(uint8_t mode)
         return "Magic";
     case MODE_SWITCHING:
         return "Switching";
+    case MODE_AGENTS:
+        return "Agents";
     default:
         return "Unknown";
     }
@@ -51,7 +53,10 @@ const char *device_mode_name(uint8_t mode)
 
 bool device_mode_needs_joystick(uint8_t mode)
 {
-    return mode == MODE_SETUP || (mode == MODE_RUNNING && !s_magic_mic_enabled);
+    // kino: Agents page uses the JoyC to navigate the session list, so it needs
+    // the joystick powered up just like Setup / Magic-without-mic.
+    return mode == MODE_SETUP || mode == MODE_AGENTS ||
+           (mode == MODE_RUNNING && !s_magic_mic_enabled);
 }
 
 bool device_mode_magic_mic_enabled(void)
@@ -71,10 +76,14 @@ bool device_mode_peripheral_switching(void)
 
 uint8_t device_mode_next_setup(uint8_t current_mode)
 {
+    // kino: BtnB now cycles through all three screens instead of toggling two:
+    // Setup -> Magic -> Agents -> Setup. Nothing is removed.
     switch (current_mode) {
     case MODE_SETUP:
         return MODE_RUNNING;
     case MODE_RUNNING:
+        return MODE_AGENTS;
+    case MODE_AGENTS:
         return MODE_SETUP;
     case MODE_SWITCHING:
         return current_mode;

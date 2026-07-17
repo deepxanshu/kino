@@ -16,6 +16,7 @@ extern "C" {
 #define MODE_SETUP     (0)
 #define MODE_RUNNING   (1)
 #define MODE_SWITCHING (2)
+#define MODE_AGENTS    (3)  // kino: agent-sessions page (Codex projects/threads)
 
 #define JOYSTICK_DEAD_ZONE (300)
 #define X_CENTER           (2180)
