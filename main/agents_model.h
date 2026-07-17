@@ -45,6 +45,11 @@ void agents_model_set(const agent_session_t *sessions, size_t count);
 // Returns live serial data once any has arrived, otherwise the demo list.
 size_t agents_model_get(agent_session_t *out, size_t max);
 
+// Currently-highlighted thread id (set by the Agents screen as the selection
+// moves) so either the joystick or a button can trigger the focus action.
+void agents_model_set_selected(const char *id);
+size_t agents_model_get_selected(char *out, size_t max);  // returns length, 0 if none
+
 #ifdef __cplusplus
 }
 #endif

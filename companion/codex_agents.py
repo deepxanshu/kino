@@ -208,6 +208,8 @@ def serial_mode(argv):
             while b"\n" in buf:
                 ln, buf = buf.split(b"\n", 1)
                 s = ln.decode("utf-8", errors="ignore").strip()
+                if s:
+                    print("recv:", s)  # debug: show all device->Mac serial lines
                 if s.startswith("@SEL "):
                     tid = s[5:].strip()
                     if tid:

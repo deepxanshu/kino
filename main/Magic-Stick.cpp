@@ -89,10 +89,11 @@ static void handle_button_press(void)
     // finish+send". Voice starts only on double so a stray tap can't trigger it.
     if (M5.BtnA.wasSingleClicked()) {
         if (current_mode == MODE_AGENTS) {
-            // kino: on the Agents page a click selects the thread and jumps to the
-            // Magic (voice) home page, same as pressing the joystick.
-            ESP_LOGI(TAG, "BtnA single (agents): select -> home");
-            device_mode_enter(MODE_RUNNING);
+            // kino: on the Agents page a click focuses the highlighted thread
+            // (sends @SEL so the companion fires the codex:// deep link) and
+            // jumps to the Magic home page -- same as pressing the joystick.
+            ESP_LOGI(TAG, "BtnA single (agents): select");
+            agents_select_current();
             return;
         }
         if (current_mode == MODE_RUNNING) {

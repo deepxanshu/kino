@@ -462,6 +462,21 @@ void handle_running_screen(void *pvParam)
 #define AGENTS_POLL_MS       30
 #define AGENTS_UI_REFRESH_MS 80
 
+// kino: focus the currently-highlighted thread (send @SEL <id> to the Mac
+// companion) and jump to the Magic home page. Shared by the joystick press and
+// the BtnA click so either input selects.
+void agents_select_current(void)
+{
+    char id[AGENT_ID_LEN];
+    size_t n = agents_model_get_selected(id, sizeof(id));
+    ESP_LOGI(TAG, "agents select: id=%s -> home", n > 0 ? id : "(none)");
+    if (n > 0) {
+        printf("@SEL %s\n", id);
+        fflush(stdout);
+    }
+    device_mode_enter(MODE_RUNNING);
+}
+
 void handle_agents_screen(void *pvParam)
 {
     (void)pvParam;
@@ -469,7 +484,7 @@ void handle_agents_screen(void *pvParam)
     bool nav_deflected = false;
     bool last_pressed = false;
     TickType_t last_step = 0;
-    TickType_t last_ui = 0;
+    uint32_t last_sig = 0xFFFFFFFFu;
     agent_session_t sessions[AGENTS_MAX];
 
     while (1) {
@@ -522,25 +537,30 @@ void handle_agents_screen(void *pvParam)
             nav_deflected = false;
         }
 
+        // keep the shared "selected id" current so a BtnA click can focus it too
+        if (count > 0) {
+            agents_model_set_selected(sessions[selected].id);
+        }
+
         if (joy_pressed && !last_pressed && count > 0) {
-            // kino: select a thread -> (1) tell the Mac companion to focus that
-            // Codex thread via "@SEL <id>" over serial, (2) jump to the Magic
-            // (voice) home page so you can immediately dictate to it.
-            ESP_LOGI(TAG, "agents select: %s id=%s -> home",
-                     sessions[selected].name, sessions[selected].id);
-            if (sessions[selected].id[0] != '\0') {
-                printf("@SEL %s\n", sessions[selected].id);
-                fflush(stdout);
-            }
-            device_mode_enter(MODE_RUNNING);
+            agents_select_current();
             last_pressed = joy_pressed;
             continue;
         }
         last_pressed = joy_pressed;
 
-        if ((now - last_ui) >= pdMS_TO_TICKS(AGENTS_UI_REFRESH_MS)) {
+        // kino: only redraw when something actually changed (selection, count,
+        // or a name/status) -- avoids the constant 80ms flicker on the LCD.
+        uint32_t sig = (uint32_t)selected * 1000003u + (uint32_t)count;
+        for (size_t i = 0; i < count; ++i) {
+            sig = sig * 31u + (uint32_t)sessions[i].status;
+            for (const char *p = sessions[i].name; *p; ++p) {
+                sig = sig * 31u + (uint8_t)*p;
+            }
+        }
+        if (sig != last_sig) {
             update_agents_screen(sessions, count, selected);
-            last_ui = now;
+            last_sig = sig;
         }
         vTaskDelay(pdMS_TO_TICKS(AGENTS_POLL_MS));
     }

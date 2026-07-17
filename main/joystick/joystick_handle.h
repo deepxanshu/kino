@@ -21,6 +21,9 @@ bool joystick_read_state(uint16_t *joyX, uint16_t *joyY, bool *pressed);
 void handle_setup_screen(void *pvParam);
 void handle_running_screen(void *pvParam);
 void handle_agents_screen(void *pvParam);
+// Focus the currently-selected agent thread (send @SEL over serial) and jump to
+// the Magic home page. Callable from the joystick press or a button.
+void agents_select_current(void);
 
 #ifdef __cplusplus
 }
