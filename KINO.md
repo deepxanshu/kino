@@ -52,6 +52,9 @@ This file is the running log so nothing gets lost as it grows.
    click) selects a thread → jumps to the Magic home page to dictate. Falls back to demo data until
    the first serial frame. Files: `agents_model.[ch]`, `agents_serial.[ch]`, `ui/ui_agents_screen.[ch]`,
    `handle_agents_screen`, `companion/codex_agents.py`.
+6. **Real thread switcher.** Selecting a chat sends `@SEL <conversationId>` back over serial; the
+   companion fires `open codex://threads/<id>` to focus that thread in the Codex app (ChatGPT.app,
+   bundle `com.openai.codex`, registers the `codex://` scheme). Frames carry the id as `name~S~id`.
 
 ### Running the companion
 ```sh
@@ -114,8 +117,6 @@ Host-side logic tests (no hardware): `cc -I main -I main/joystick test/test_<x>.
   remote as a 4th screen in the BtnB cycle; scroll IR commands with the JoyC, press to fire. No
   companion/network needed. (WiFi/smart-home — HomeKit, smart bulbs — is a separate, harder path
   needing network + per-vendor APIs; do IR first.)
-- **Real Mac-side thread focus on Agents select** — currently select just jumps to the home page;
-  actually switching the Codex thread needs the companion to script/deep-link the Codex app.
 - **Auto-start the companion** — a launchd/login item so the live feed is always on.
 
 **Later:**
