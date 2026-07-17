@@ -108,6 +108,14 @@ Host-side logic tests (no hardware): `cc -I main -I main/joystick test/test_<x>.
 ## Roadmap / ideas (not built)
 
 **Near-term (reuse the pipeline we have):**
+- **Stabilize the Codex thread-switcher (IN PROGRESS — parked).** The *mechanism is proven*: running
+  `open "codex://threads/<conversationId>"` in a terminal foregrounds the Codex app (ChatGPT.app,
+  bundle `com.openai.codex`) — that's the "command sent when you click a thread". The full chain is
+  wired (device sends `@SEL <id>` over serial → companion runs `open codex://...`). **Blocker:** the
+  stick resets / drops off USB whenever the companion opens or closes the serial port (DTR/RTS
+  toggle), so the back-channel is unreliable and validation kept failing. **Fix:** open the port
+  *without* asserting DTR/RTS so the device doesn't reset (`stty -f <port> -clocal -hupcl` before
+  open, or pyserial `dsrdtr`/manual line control), then validate press → `@SEL` → `open` end-to-end.
 - **Messages page (voice-reply to iMessage).** Same architecture as the Agents page: companion reads
   `~/Library/Messages/chat.db` (needs Full Disk Access, read-only) → streams recent/unread threads to
   a new "Messages" screen → select a thread → companion focuses that conversation (AppleScript) →
