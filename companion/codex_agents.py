@@ -69,19 +69,39 @@ def session_cwd(path):
     return None
 
 
-def derive():
+def recent_session_files(limit):
+    files = glob.glob(os.path.join(CODEX, "sessions", "**", "rollout-*.jsonl"), recursive=True)
+    files.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+    return files[:limit]
+
+
+def thread_id_from_filename(path):
+    # rollout-<ISO-ts-with-dashes>-<uuid 5 groups>.jsonl
+    base = os.path.basename(path)
+    stem = base[len("rollout-"):-len(".jsonl")] if base.startswith("rollout-") else base
+    parts = stem.split("-")
+    return "-".join(parts[-5:]) if len(parts) >= 5 else stem
+
+
+def derive(limit=8):
+    # Option A: list = most-recently-active chats (by session-file mtime), which
+    # reflects real recent activity better than thread-writable-roots (which goes
+    # stale). Status: attention (queued-follow-up) > running (live process) > idle.
     g = global_state()
-    threads = list((g.get("thread-writable-roots") or {}).keys())
     active_roots = set(g.get("active-workspace-roots") or [])
     qf = g.get("queued-follow-ups")
     queued = set(qf.keys()) if isinstance(qf, dict) else set()
     running = running_conversation_ids()
 
     rows = []
-    for tid in threads:
-        sf = session_file_for(tid)
-        cwd = session_cwd(sf) if sf else None
-        last = os.path.getmtime(sf) if sf else 0
+    seen = set()
+    for sf in recent_session_files(limit * 3):
+        tid = thread_id_from_filename(sf)
+        if tid in seen:
+            continue
+        seen.add(tid)
+        cwd = session_cwd(sf)
+        last = os.path.getmtime(sf)
         project = os.path.basename(cwd.rstrip("/")) if cwd else "?"
         if tid in queued:
             status = "attention"
@@ -96,6 +116,8 @@ def derive():
             "last": last,
             "active": bool(cwd and cwd in active_roots),
         })
+        if len(rows) >= limit:
+            break
     rows.sort(key=lambda r: (r["status"] != "attention", -r["last"]))
     return rows, running, queued
 
