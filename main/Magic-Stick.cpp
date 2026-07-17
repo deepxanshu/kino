@@ -36,7 +36,8 @@ static void log_porta_levels(const char *stage)
  * @brief Handle Button Press.
  * 1. Click BtnA on Magic to toggle the device mic on/off (joystick pauses while mic is on --
  *    shared PortA) and send one Ctrl+F5 tap (Wispr Flow start/stop).
- * 2. Click BtnPWR (side power button) on Magic to send Escape and force mic off (cancel dictation).
+ * 2. Click BtnPWR (side power button): while dictating -> Escape (cancel + mic off);
+ *    otherwise -> Enter (submit/send the transcribed text).
  * 3. Click BtnB to toggle Setup <-> Magic. BtnB is the only setup entry.
  * 4. Hold BtnB 3s to reopen pairing; hold BtnB 8s to clear bonds and reboot.
  */
@@ -94,14 +95,21 @@ static void handle_button_press(void)
         }
         return;
     }
-    // kino: BtnPWR (side power button) click = Escape (cancel dictation) and
-    // force back to Joystick mode, so cancel doesn't need a long hold.
+    // kino: BtnPWR (side power button) is context-dependent:
+    //   - while dictating (mic on)  -> Escape: cancel dictation + drop mic.
+    //   - otherwise (mic off)       -> Enter: submit/send the transcribed text.
     if (M5.BtnPWR.wasClicked()) {
-        ESP_LOGI(TAG, "BtnPWR click: Escape+restore cursor mode=%s mic=%d",
-                 device_mode_name(current_mode), device_mode_magic_mic_enabled());
+        bool dictating = device_mode_magic_mic_enabled();
+        ESP_LOGI(TAG, "BtnPWR click: %s mode=%s mic=%d",
+                 dictating ? "Escape+cancel" : "Enter/send",
+                 device_mode_name(current_mode), dictating);
         if (current_mode == MODE_RUNNING) {
-            bt_input_escape_tap();
-            device_mode_set_magic_mic_enabled(false);
+            if (dictating) {
+                bt_input_escape_tap();
+                device_mode_set_magic_mic_enabled(false);
+            } else {
+                bt_input_enter_tap();
+            }
         }
         return;
     }

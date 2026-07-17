@@ -1170,6 +1170,16 @@ void bt_input_escape_tap(void)
     (void)bt_input_key_send(0, BT_HID_ESC_USAGE, false);
 }
 
+void bt_input_enter_tap(void)
+{
+    if (!bt_input_key_send(0, BT_HID_ENTER_USAGE, true)) {
+        return;
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(BT_HID_F15_TAP_MS));
+    (void)bt_input_key_send(0, BT_HID_ENTER_USAGE, false);
+}
+
 void bt_input_hfp_mic_set_enabled(bool enabled)
 {
     s_state.mic_enabled = enabled;

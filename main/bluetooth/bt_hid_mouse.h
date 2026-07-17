@@ -33,7 +33,8 @@ extern "C" {
 // device -- Fn is consumed inside Apple keyboards' own controller and has no
 // transmittable HID usage code.)
 #define BT_HID_F5_USAGE (0x3e)
-#define BT_HID_ESC_USAGE (0x29)  // Keyboard Escape usage, used to cancel dictation
+#define BT_HID_ESC_USAGE (0x29)    // Keyboard Escape usage, used to cancel dictation
+#define BT_HID_ENTER_USAGE (0x28)  // Keyboard Return/Enter usage, used to send/submit
 #define BT_HID_F15_TAP_MS (80)
 
 esp_hidd_app_param_t *bt_hid_mouse_app_param(void);
