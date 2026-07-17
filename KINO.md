@@ -25,7 +25,7 @@ This file is the running log so nothing gets lost as it grows.
 | JoyC press | Left click |
 | JoyC click, then hold & move (<450 ms window) | Scroll / pan |
 | **BtnA tap** | Toggle device mic on/off **and** send **Ctrl+F5** (Wispr Flow start/stop) |
-| **BtnPWR (side button) tap** | Send **Escape** (cancel dictation), force mic off |
+| **BtnPWR (side button) tap** | While dictating → **Escape** (cancel + mic off); otherwise → **Enter** (submit/send) |
 | BtnB tap | Toggle Setup ⇄ Magic screen |
 | BtnB hold 3 s / 8 s | Re-pair / clear bonds + reboot |
 | Screen dot | 🔴 mouse · ⚪ mic active · 🟡 scroll |
@@ -38,7 +38,11 @@ This file is the running log so nothing gets lost as it grows.
    exposes `bt_input_dictation_tap()` (Ctrl+F5) and `bt_input_escape_tap()` (Esc).
 2. **BtnA = mic + dictation trigger.** Tap toggles the device's own mic (HFP) and fires the Wispr
    shortcut in one gesture. (Replaced upstream's single-click-toggle / double-click-F15 split.)
-3. **BtnPWR = cancel.** The side power button sends Escape and forces mic off — no long-hold gesture.
+3. **BtnPWR = context-dependent Escape/Enter.** While dictating it sends Escape (cancel + mic off);
+   otherwise it sends Enter to submit/send (e.g. fire a message to an agent right after transcription).
+4. **Joystick freeze fix.** When the JoyC MCU hangs while leaving the I2C bus idle, recovery now
+   forces a real PortA power-cycle instead of re-probing forever; stuck-retry backoff cut 30s → 5s.
+   (Previously required a manual device restart.)
 
 ## Hardware constraints & decisions (hard-won — don't re-litigate)
 
