@@ -24,8 +24,9 @@ This file is the running log so nothing gets lost as it grows.
 | JoyC move | Move cursor |
 | JoyC press | Left click |
 | JoyC click, then hold & move (<450 ms window) | Scroll / pan |
-| **BtnA tap** | Toggle device mic on/off **and** send **Ctrl+F5** (Wispr Flow start/stop) |
-| **BtnPWR (side button) tap** | While dictating → **Escape** (cancel + mic off); otherwise → **Enter** (submit/send) |
+| **BtnA double-tap** | Start voice dictation (device mic on + Ctrl+F5) |
+| **BtnA single-tap** | Enter/send; if dictating, first stops voice (Ctrl+F5 paste) then sends. On Agents page: select thread → jump home |
+| **BtnPWR (side button) tap** | **Escape** (cancel dictation + mic off) |
 | BtnB tap | Cycle screens: Setup → Magic → **Agents** → Setup |
 | **Agents page** | JoyC ↑/↓ = move selection · press = focus session · status dots (run/wait/idle/err) |
 | BtnB hold 3 s / 8 s | Re-pair / clear bonds + reboot |
@@ -44,10 +45,22 @@ This file is the running log so nothing gets lost as it grows.
 4. **Joystick freeze fix.** When the JoyC MCU hangs while leaving the I2C bus idle, recovery now
    forces a real PortA power-cycle instead of re-probing forever; stuck-retry backoff cut 30s → 5s.
    (Previously required a manual device restart.)
-5. **Agents page (Phase 2).** A third screen for coding-agent sessions (scoped to Codex). BtnB cycles
-   to it; JoyC scrolls the session list; status dots flag which need attention. Currently driven by
-   hardcoded demo data (`agents_model.c`) — the data source will move to a Mac companion over
-   USB-serial. Files: `agents_model.[ch]`, `ui/ui_agents_screen.[ch]`, `handle_agents_screen`.
+5. **Agents page + live Codex feed (Phase 2–3).** A third screen (BtnB cycles to it) listing your
+   Codex chats newest-first with status dots. A Mac companion (`companion/codex_agents.py`) reads
+   `~/.codex` (read-only, metadata only) and **streams the list over USB-serial**; the firmware's
+   `handle_agents_serial` task reads UART0 `@A|name~S|…` frames into `agents_model`. JoyC (or a BtnA
+   click) selects a thread → jumps to the Magic home page to dictate. Falls back to demo data until
+   the first serial frame. Files: `agents_model.[ch]`, `agents_serial.[ch]`, `ui/ui_agents_screen.[ch]`,
+   `handle_agents_screen`, `companion/codex_agents.py`.
+
+### Running the companion
+```sh
+pip3 install pyserial          # once (or use the esp-idf env python, which has it)
+python3 companion/codex_agents.py            # print the derived chat list
+python3 companion/codex_agents.py --serial   # stream it to the stick over USB
+```
+Keep `--serial` running for live data. Status logic: `queued-follow-ups` → attention (yellow),
+running process → green, else idle. Real Mac-side thread-focus on select is a later phase.
 
 ## Hardware constraints & decisions (hard-won — don't re-litigate)
 
