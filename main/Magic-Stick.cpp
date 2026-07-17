@@ -34,11 +34,10 @@ static void log_porta_levels(const char *stage)
 
 /**
  * @brief Handle Button Press.
- * 1. Click BtnA on Magic to toggle the device mic on/off (joystick pauses while mic is on --
- *    shared PortA) and send one Ctrl+F5 tap (Wispr Flow start/stop).
- * 2. Click BtnPWR (side power button): while dictating -> Escape (cancel + mic off);
- *    otherwise -> Enter (submit/send the transcribed text).
- * 3. Click BtnB to toggle Setup <-> Magic. BtnB is the only setup entry.
+ * 1. BtnA single tap = Enter (send). BtnA double tap = toggle voice dictation
+ *    (device mic on/off + Ctrl+F5; joystick pauses while mic is on -- shared PortA).
+ * 2. Click BtnPWR (side power button) = Escape (cancel dictation + mic off).
+ * 3. Click BtnB to cycle screens Setup -> Magic -> Agents.
  * 4. Hold BtnB 3s to reopen pairing; hold BtnB 8s to clear bonds and reboot.
  */
 static void handle_button_press(void)
@@ -82,12 +81,18 @@ static void handle_button_press(void)
     }
 
     uint8_t current_mode = app_state_get_mode();
-    // kino: single-tap BtnA = toggle the device's own mic on/off AND fire the
-    // Wispr trigger (Ctrl+F5). Tap once -> device mic ON (joystick pauses --
-    // shared PortA/GPIO0) + Wispr starts; tap again -> mic OFF, joystick back,
-    // Wispr stops+pastes. Select "Magic Stick" as the input in Wispr/macOS Sound.
-    if (M5.BtnA.wasClicked()) {
-        ESP_LOGI(TAG, "BtnA click: toggle mic + Ctrl-F5 mode=%s mic=%d hid=%s",
+    // kino: BtnA single tap = Enter (send/submit -- the frequent post-dictation
+    // action). BtnA double tap = toggle voice dictation (device mic + Ctrl+F5).
+    // Voice on double-tap so a stray tap can't start dictation; Enter on single.
+    if (M5.BtnA.wasSingleClicked()) {
+        ESP_LOGI(TAG, "BtnA single: Enter mode=%s", device_mode_name(current_mode));
+        if (current_mode == MODE_RUNNING) {
+            bt_input_enter_tap();
+        }
+        return;
+    }
+    if (M5.BtnA.wasDoubleClicked()) {
+        ESP_LOGI(TAG, "BtnA double: toggle voice mode=%s mic=%d hid=%s",
                  device_mode_name(current_mode), device_mode_magic_mic_enabled(),
                  bt_input_hid_status_text());
         if (current_mode == MODE_RUNNING && device_mode_toggle_magic_function()) {
@@ -95,21 +100,13 @@ static void handle_button_press(void)
         }
         return;
     }
-    // kino: BtnPWR (side power button) is context-dependent:
-    //   - while dictating (mic on)  -> Escape: cancel dictation + drop mic.
-    //   - otherwise (mic off)       -> Enter: submit/send the transcribed text.
+    // kino: BtnPWR (side power button) = Escape only (cancel dictation + drop mic).
     if (M5.BtnPWR.wasClicked()) {
-        bool dictating = device_mode_magic_mic_enabled();
-        ESP_LOGI(TAG, "BtnPWR click: %s mode=%s mic=%d",
-                 dictating ? "Escape+cancel" : "Enter/send",
-                 device_mode_name(current_mode), dictating);
+        ESP_LOGI(TAG, "BtnPWR: Escape mode=%s mic=%d",
+                 device_mode_name(current_mode), device_mode_magic_mic_enabled());
         if (current_mode == MODE_RUNNING) {
-            if (dictating) {
-                bt_input_escape_tap();
-                device_mode_set_magic_mic_enabled(false);
-            } else {
-                bt_input_enter_tap();
-            }
+            bt_input_escape_tap();
+            device_mode_set_magic_mic_enabled(false);
         }
         return;
     }
