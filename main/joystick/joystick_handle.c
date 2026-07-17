@@ -523,7 +523,13 @@ void handle_agents_screen(void *pvParam)
         }
 
         if (joy_pressed && !last_pressed && count > 0) {
-            ESP_LOGI(TAG, "agents focus: %s", sessions[selected].name);
+            // kino: select a thread -> jump to the Magic (voice) home page so you
+            // can immediately dictate to it. (Real Mac-side thread focus is a
+            // later phase; for now this is the on-device switcher jump.)
+            ESP_LOGI(TAG, "agents select: %s -> home", sessions[selected].name);
+            device_mode_enter(MODE_RUNNING);
+            last_pressed = joy_pressed;
+            continue;
         }
         last_pressed = joy_pressed;
 
