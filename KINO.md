@@ -26,7 +26,8 @@ This file is the running log so nothing gets lost as it grows.
 | JoyC click, then hold & move (<450 ms window) | Scroll / pan |
 | **BtnA tap** | Toggle device mic on/off **and** send **Ctrl+F5** (Wispr Flow start/stop) |
 | **BtnPWR (side button) tap** | While dictating → **Escape** (cancel + mic off); otherwise → **Enter** (submit/send) |
-| BtnB tap | Toggle Setup ⇄ Magic screen |
+| BtnB tap | Cycle screens: Setup → Magic → **Agents** → Setup |
+| **Agents page** | JoyC ↑/↓ = move selection · press = focus session · status dots (run/wait/idle/err) |
 | BtnB hold 3 s / 8 s | Re-pair / clear bonds + reboot |
 | Screen dot | 🔴 mouse · ⚪ mic active · 🟡 scroll |
 
@@ -43,6 +44,10 @@ This file is the running log so nothing gets lost as it grows.
 4. **Joystick freeze fix.** When the JoyC MCU hangs while leaving the I2C bus idle, recovery now
    forces a real PortA power-cycle instead of re-probing forever; stuck-retry backoff cut 30s → 5s.
    (Previously required a manual device restart.)
+5. **Agents page (Phase 2).** A third screen for coding-agent sessions (scoped to Codex). BtnB cycles
+   to it; JoyC scrolls the session list; status dots flag which need attention. Currently driven by
+   hardcoded demo data (`agents_model.c`) — the data source will move to a Mac companion over
+   USB-serial. Files: `agents_model.[ch]`, `ui/ui_agents_screen.[ch]`, `handle_agents_screen`.
 
 ## Hardware constraints & decisions (hard-won — don't re-litigate)
 
