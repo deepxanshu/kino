@@ -9,16 +9,6 @@
 #include "freertos/semphr.h"
 #include <string.h>
 
-// kino: demo data used until the Mac companion streams real sessions over serial.
-// Mirrors the mockup so the on-device page matches what we designed.
-static const agent_session_t s_demo[] = {
-    {"kino-fw", AGENT_STATUS_ATTENTION, ""},
-    {"bleu-api", AGENT_STATUS_RUNNING, ""},
-    {"site-brief", AGENT_STATUS_RUNNING, ""},
-    {"granola", AGENT_STATUS_IDLE, ""},
-    {"deploy", AGENT_STATUS_ERROR, ""},
-};
-
 static agent_session_t s_live[AGENTS_MAX];
 static size_t s_live_count = 0;
 static bool s_have_live = false;
@@ -81,15 +71,9 @@ size_t agents_model_get(agent_session_t *out, size_t max)
         xSemaphoreGive(s_lock);
     }
 
-    if (!have_live) {
-        n = sizeof(s_demo) / sizeof(s_demo[0]);
-        if (n > max) {
-            n = max;
-        }
-        for (size_t i = 0; i < n; ++i) {
-            out[i] = s_demo[i];
-        }
-    }
+    // kino: no demo fallback. If no live frame has arrived yet, n stays 0 so the
+    // UI shows a clear "waiting for feed" state instead of misleading fake data.
+    (void)have_live;
     return n;
 }
 

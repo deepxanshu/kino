@@ -137,7 +137,7 @@ void create_agents_screen(void)
     }
 
     agents_empty = lv_label_create(agents_screen);
-    lv_label_set_text(agents_empty, "no sessions");
+    lv_label_set_text(agents_empty, "waiting for feed");
     lv_obj_align(agents_empty, LV_ALIGN_CENTER, 0, 0);
     lv_obj_set_style_text_font(agents_empty, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(agents_empty, ui_theme_grid_color(), LV_PART_MAIN);
