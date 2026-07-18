@@ -8,7 +8,7 @@
   <array>
     <string>/Users/deepanshu/devs-workspace/fo/magicstick/companion/.venv/bin/python</string>
     <string>/Users/deepanshu/devs-workspace/fo/magicstick/companion/codex_agents.py</string>
-    <string>--serial</string>
+    <string>--net</string>
   </array>
   <key>WorkingDirectory</key>
   <string>/Users/deepanshu/devs-workspace/fo/magicstick</string>

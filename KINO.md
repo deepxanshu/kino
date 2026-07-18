@@ -101,6 +101,13 @@ feed, the screen shows "waiting for feed".
    in Wispr) while mic mode is on.
 2. **Pairing:** pair "Magic Stick" over Bluetooth. **After flashing a descriptor change, re-pair**
    (Forget on Mac → BtnB hold 8 s on stick → BtnB hold 3 s → pair fresh).
+3. **WiFi feed (cable-free agent list):** put 2.4 GHz creds in `main/wifi_config.h` (gitignored — run
+   `python3 companion/set_wifi_pass.py` for the password) and turn OFF the router's "client isolation".
+   The stick joins WiFi (coexists with BT), advertises `kino.local`, runs a TCP server on 5010. The
+   companion auto-starts over WiFi via launchd; manual: `companion/.venv/bin/python companion/codex_agents.py --net`
+   (`--serial` = USB fallback). **RAM note:** WiFi+BT+LVGL is tight on the ESP32 — to fit it took WiFi
+   IRAM-opt OFF, WiFi buffers cut (4/8/8) + AMPDU off, a **3 MB app partition** (`partitions.csv`), and
+   dropping the USB-serial reader task. Data (and flashing) still work over USB too.
 
 ## Build & flash
 

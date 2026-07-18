@@ -233,6 +233,63 @@ def _start_reader(ser):
     threading.Thread(target=reader, daemon=True).start()
 
 
+def net_mode(argv):
+    # WiFi transport: connect to the stick's TCP server (kino.local:5010), stream
+    # the agent list, and read "@SEL <id>" back to fire the codex:// deep link.
+    import socket
+    import threading
+    import subprocess
+
+    host = "kino.local"
+    port = 5010
+    for i, a in enumerate(argv):
+        if a == "--net" and i + 1 < len(argv) and not argv[i + 1].startswith("-"):
+            host = argv[i + 1]
+
+    print(f"kino companion (WiFi): connecting to {host}:{port} (Ctrl-C to stop)", flush=True)
+    while True:
+        try:
+            sock = socket.create_connection((host, port), timeout=6)
+        except Exception as e:
+            print("connect failed, retrying:", e, flush=True)
+            time.sleep(3)
+            continue
+        print("connected to", host, flush=True)
+
+        def reader(s):
+            buf = b""
+            try:
+                while True:
+                    chunk = s.recv(128)
+                    if not chunk:
+                        break
+                    buf += chunk
+                    while b"\n" in buf:
+                        ln, buf = buf.split(b"\n", 1)
+                        line = ln.decode("utf-8", errors="ignore").strip()
+                        if line.startswith("@SEL "):
+                            tid = line[5:].strip()
+                            if tid:
+                                print("focus thread:", tid, flush=True)
+                                subprocess.run(["open", f"codex://threads/{tid}"], check=False)
+            except Exception:
+                pass
+
+        threading.Thread(target=reader, args=(sock,), daemon=True).start()
+        try:
+            while True:
+                rows, _, _ = derive()
+                sock.sendall(frame(rows).encode())
+                time.sleep(1.5)
+        except Exception as e:
+            print("net dropped, reconnecting:", e, flush=True)
+            try:
+                sock.close()
+            except Exception:
+                pass
+            time.sleep(2)
+
+
 def serial_mode(argv):
     try:
         import serial  # noqa: F401
@@ -276,6 +333,9 @@ def serial_mode(argv):
 
 
 def main():
+    if "--net" in sys.argv:
+        net_mode(sys.argv)
+        return
     if "--serial" in sys.argv:
         serial_mode(sys.argv)
         return
