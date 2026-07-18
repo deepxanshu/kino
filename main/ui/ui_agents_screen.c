@@ -14,7 +14,7 @@
 #define AGENTS_VISIBLE_ROWS 7
 #define AGENTS_ROW_H        24
 #define AGENTS_ROW_TOP      34
-#define AGENTS_DOT_SIZE     8
+#define AGENTS_DOT_SIZE     11
 
 static lv_obj_t *agents_screen  = NULL;
 static lv_obj_t *agents_title    = NULL;
@@ -38,21 +38,7 @@ static lv_color_t status_color(agent_status_t s)
     case AGENT_STATUS_ERROR:
         return ui_theme_red_color();
     default:
-        return ui_theme_grid_color();
-    }
-}
-
-static const char *status_text(agent_status_t s)
-{
-    switch (s) {
-    case AGENT_STATUS_RUNNING:
-        return "run";
-    case AGENT_STATUS_ATTENTION:
-        return "wait";
-    case AGENT_STATUS_ERROR:
-        return "err";
-    default:
-        return "idle";
+        return ui_theme_cyan_color();  // idle = light blue (calmer than gray)
     }
 }
 
@@ -118,8 +104,8 @@ void create_agents_screen(void)
 
         row_name[i] = lv_label_create(row_box[i]);
         lv_label_set_long_mode(row_name[i], LV_LABEL_LONG_CLIP);
-        lv_obj_set_width(row_name[i], 72);
-        lv_obj_align(row_name[i], LV_ALIGN_LEFT_MID, 18, 0);
+        lv_obj_set_width(row_name[i], 100);
+        lv_obj_align(row_name[i], LV_ALIGN_LEFT_MID, 20, 0);
         lv_obj_set_style_text_font(row_name[i], &lv_font_montserrat_14, 0);
         lv_obj_set_style_text_color(row_name[i], ui_theme_fg_color(), LV_PART_MAIN);
         lv_label_set_text(row_name[i], "");
@@ -221,8 +207,7 @@ void update_agents_screen(const agent_session_t *sessions, size_t count, int sel
         lv_obj_clear_flag(row_box[i], LV_OBJ_FLAG_HIDDEN);
         lv_obj_set_style_bg_color(row_dot[i], status_color(sessions[i].status), LV_PART_MAIN);
         lv_label_set_text(row_name[i], sessions[i].name);
-        lv_label_set_text(row_status[i], status_text(sessions[i].status));
-        lv_obj_set_style_text_color(row_status[i], status_color(sessions[i].status), LV_PART_MAIN);
+        // status is shown by the dot colour only -- no text, to reduce clutter
 
         bool sel = (i == selected);
         lv_obj_set_style_border_width(row_box[i], sel ? 1 : 0, LV_PART_MAIN);

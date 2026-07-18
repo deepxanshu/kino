@@ -100,7 +100,13 @@ def thread_title(path, fallback):
                                 text = it["text"]
                                 break
                     if text and not text.lstrip().startswith("<"):
-                        return text.strip().split("\n")[0][:40]
+                        t = text.strip().split("\n")[0]
+                        for pre in ("https://", "http://", "www."):
+                            if t.lower().startswith(pre):
+                                t = t[len(pre):]
+                        t = t.strip("[]#*`>- ").strip()
+                        if t:
+                            return t[:22]
     except Exception:
         pass
     return fallback

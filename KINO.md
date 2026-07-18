@@ -28,7 +28,7 @@ This file is the running log so nothing gets lost as it grows.
 | **BtnA single-tap** | Enter/send; if dictating, first stops voice (Ctrl+F5 paste) then sends. On Agents page: select thread → jump home |
 | **BtnPWR (side button)** | click = **Escape** (only while dictating) · ~6s hold = hardware power off (for battery) |
 | BtnB tap | Cycle screens: Setup → Magic → **Agents** → Setup |
-| **Agents page** | JoyC ↑/↓ = move selection · press = focus session · status dots (run/wait/idle/err) |
+| **Agents page** | JoyC ↑/↓ = move selection · press (or BtnA click) = focus thread → jumps home · status = colour dot only (🟢 running · 🟡 waiting · 🔴 error · 🔵 idle), truncated thread name |
 | BtnB hold 3 s / 8 s | Re-pair / clear bonds + reboot |
 | Screen dot | 🔴 mouse · ⚪ mic active · 🟡 scroll |
 
