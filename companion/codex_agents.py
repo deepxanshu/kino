@@ -69,57 +69,72 @@ def session_cwd(path):
     return None
 
 
-def recent_session_files(limit):
-    files = glob.glob(os.path.join(CODEX, "sessions", "**", "rollout-*.jsonl"), recursive=True)
-    files.sort(key=lambda p: os.path.getmtime(p), reverse=True)
-    return files[:limit]
+def project_name_for_path(local_projects, path):
+    for _pid, p in local_projects.items():
+        for rp in (p.get("rootPaths") or []):
+            if rp == path:
+                return p.get("name") or os.path.basename(rp.rstrip("/"))
+    return os.path.basename(path.rstrip("/")) if path else "?"
 
 
-def thread_id_from_filename(path):
-    # rollout-<ISO-ts-with-dashes>-<uuid 5 groups>.jsonl
-    base = os.path.basename(path)
-    stem = base[len("rollout-"):-len(".jsonl")] if base.startswith("rollout-") else base
-    parts = stem.split("-")
-    return "-".join(parts[-5:]) if len(parts) >= 5 else stem
+def thread_title(path, fallback):
+    # Title = the first *real* user message (skip <tag> boilerplate like
+    # <environment_context>/<recommended_plugins>), truncated. Else fallback.
+    if not path:
+        return fallback
+    try:
+        with open(path) as f:
+            for i, line in enumerate(f):
+                if i > 80:
+                    break
+                d = json.loads(line)
+                p = d.get("payload", d)
+                if isinstance(p, dict) and p.get("role") == "user":
+                    c = p.get("content")
+                    text = None
+                    if isinstance(c, str):
+                        text = c
+                    elif isinstance(c, list):
+                        for it in c:
+                            if isinstance(it, dict) and it.get("text"):
+                                text = it["text"]
+                                break
+                    if text and not text.lstrip().startswith("<"):
+                        return text.strip().split("\n")[0][:40]
+    except Exception:
+        pass
+    return fallback
 
 
 def derive(limit=8):
-    # Option A: list = most-recently-active chats (by session-file mtime), which
-    # reflects real recent activity better than thread-writable-roots (which goes
-    # stale). Status: attention (queued-follow-up) > running (live process) > idle.
+    # Source of truth = the Codex app's OWN open threads (thread-writable-roots),
+    # with project names from local-projects. This matches what you see in the
+    # app and uses the REAL conversationIds (so codex:// deep links resolve).
     g = global_state()
-    active_roots = set(g.get("active-workspace-roots") or [])
+    local_projects = g.get("local-projects", {}) or {}
+    twr = g.get("thread-writable-roots", {}) or {}
+    active = set(g.get("active-workspace-roots") or [])
     qf = g.get("queued-follow-ups")
     queued = set(qf.keys()) if isinstance(qf, dict) else set()
-    running = running_conversation_ids()
 
     rows = []
-    seen = set()
-    for sf in recent_session_files(limit * 3):
-        tid = thread_id_from_filename(sf)
-        if tid in seen:
-            continue
-        seen.add(tid)
-        cwd = session_cwd(sf)
-        last = os.path.getmtime(sf)
-        project = os.path.basename(cwd.rstrip("/")) if cwd else "?"
-        if tid in queued:
-            status = "attention"
-        elif tid in running:
-            status = "running"
-        else:
-            status = "idle"
+    for tid, paths in twr.items():
+        path = paths[0] if isinstance(paths, list) and paths else ""
+        proj = project_name_for_path(local_projects, path)
+        sf = session_file_for(tid)
+        last = os.path.getmtime(sf) if sf else 0
+        title = thread_title(sf, f"{proj} {tid[-4:]}")
+        status = "attention" if tid in queued else "idle"
         rows.append({
             "thread": tid,
-            "project": project,
+            "project": proj,
+            "title": title,
             "status": status,
             "last": last,
-            "active": bool(cwd and cwd in active_roots),
+            "active": path in active,
         })
-        if len(rows) >= limit:
-            break
     rows.sort(key=lambda r: (r["status"] != "attention", -r["last"]))
-    return rows, running, queued
+    return rows[:limit], set(), queued
 
 
 def fmt_ago(epoch):
@@ -144,8 +159,7 @@ def frame(rows, limit=7):
     fire `open codex://threads/<id>` to focus that thread."""
     parts = ["@A"]
     for r in rows[:limit]:
-        short = r["thread"][-4:]
-        name = f"{r['project']} {short}".replace("|", "").replace("~", "")[:AGENT_NAME_LEN - 1]
+        name = r.get("title", r["project"]).replace("|", "").replace("~", "")[:AGENT_NAME_LEN - 1]
         tid = r["thread"].replace("|", "").replace("~", "")
         parts.append(f"{name}~{STATUS_CHAR.get(r['status'], 'I')}~{tid}")
     return "|".join(parts) + "\n"
@@ -247,11 +261,11 @@ def main():
         print("queued-follow-ups    :", queued or "(none)")
         print()
 
-    print("=== active Codex chats ===")
-    print(f"{'STATUS':<10} {'PROJECT':<14} {'THREAD':<8} LAST")
+    print("=== open Codex threads ===")
+    print(f"{'STATUS':<10} {'TITLE':<26} {'THREAD':<8} LAST")
     for r in rows:
         star = "*" if r["active"] else " "
-        print(f"{r['status']:<10} {r['project']:<13}{star} {r['thread'][-6:]:<8} {fmt_ago(r['last'])}")
+        print(f"{r['status']:<10} {r.get('title', '')[:24]:<25}{star} {r['thread'][-6:]:<8} {fmt_ago(r['last'])}")
     if not rows:
         print("(no open threads in thread-writable-roots)")
 
