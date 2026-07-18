@@ -38,8 +38,8 @@ static void log_porta_levels(const char *stage)
  * @brief Handle Button Press.
  * 1. BtnA double tap = start voice (device mic + Ctrl+F5). BtnA single tap = Enter;
  *    if voice is active, single tap stops it (Ctrl+F5 paste) then sends Enter.
- * 2. BtnPWR (side power button): click = Escape (cancel dictation + mic off);
- *    hold = deep sleep (press power button to wake). ~6s hold = hardware power off.
+ * 2. BtnPWR (side) click: while dictating = Escape; otherwise = toggle sleep
+ *    (screen off/on, ESP stays running). ~6s hold = hardware power off.
  * 3. Click BtnB to cycle screens Setup -> Magic -> Agents.
  * 4. Hold BtnB 3s to reopen pairing; hold BtnB 8s to clear bonds and reboot.
  */
@@ -48,6 +48,7 @@ static void handle_button_press(void)
     static bool wait_release = false;
     static bool btnb_pair_hold_done = false;
     static bool btnb_clear_hold_done = false;
+    static bool s_sleeping = false;
     static TickType_t cooldown_until = 0;
 
     TickType_t now = xTaskGetTickCount();
@@ -85,17 +86,6 @@ static void handle_button_press(void)
 
     uint8_t current_mode = app_state_get_mode();
 
-    // kino: HOLD BtnPWR (side button) = deep sleep to save battery. Screen off +
-    // ESP32 deep sleep; press the power button to wake (device reboots and
-    // reconnects). Works from any screen. Single-click stays Escape (below).
-    if (M5.BtnPWR.wasHold()) {
-        ESP_LOGW(TAG, "BtnPWR hold: entering deep sleep (press power button to wake)");
-        M5.Display.sleep();
-        vTaskDelay(pdMS_TO_TICKS(80));
-        M5.Power.deepSleep();  // does not return; wakes via power-button reset
-        return;
-    }
-
     // kino: BtnA double tap = START voice (device mic on + Ctrl+F5). BtnA single
     // tap = Enter; and if voice is active, single tap ALSO stops it first (Ctrl+F5
     // to make Wispr paste) then sends Enter -- so "double to talk, single to
@@ -132,13 +122,24 @@ static void handle_button_press(void)
         }
         return;
     }
-    // kino: BtnPWR (side power button) = Escape only (cancel dictation + drop mic).
+    // kino: BtnPWR (side power button) click:
+    //   - while dictating -> Escape (cancel dictation + drop mic).
+    //   - otherwise       -> toggle sleep (screen off/on). The ESP keeps running
+    //     so wake is instant & reliable (no deep-sleep reboot). ~6s hold is still
+    //     hardware power-off via the AXP192.
     if (M5.BtnPWR.wasClicked()) {
-        ESP_LOGI(TAG, "BtnPWR: Escape mode=%s mic=%d",
-                 device_mode_name(current_mode), device_mode_magic_mic_enabled());
-        if (current_mode == MODE_RUNNING) {
+        if (current_mode == MODE_RUNNING && device_mode_magic_mic_enabled()) {
+            ESP_LOGI(TAG, "BtnPWR: Escape (dictating)");
             bt_input_escape_tap();
             device_mode_set_magic_mic_enabled(false);
+        } else if (s_sleeping) {
+            ESP_LOGI(TAG, "BtnPWR: wake");
+            M5.Display.wakeup();
+            s_sleeping = false;
+        } else {
+            ESP_LOGI(TAG, "BtnPWR: sleep");
+            M5.Display.sleep();
+            s_sleeping = true;
         }
         return;
     }

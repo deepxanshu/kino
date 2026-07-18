@@ -26,7 +26,7 @@ This file is the running log so nothing gets lost as it grows.
 | JoyC click, then hold & move (<450 ms window) | Scroll / pan |
 | **BtnA double-tap** | Start voice dictation (device mic on + Ctrl+F5) |
 | **BtnA single-tap** | Enter/send; if dictating, first stops voice (Ctrl+F5 paste) then sends. On Agents page: select thread → jump home |
-| **BtnPWR (side button)** | tap = **Escape** (cancel + mic off) · **hold = deep sleep** (press power btn to wake) · ~6s hold = hardware power off |
+| **BtnPWR (side button)** | click: while dictating = **Escape** · otherwise = **toggle sleep** (screen off/on, instant wake) · ~6s hold = hardware power off |
 | BtnB tap | Cycle screens: Setup → Magic → **Agents** → Setup |
 | **Agents page** | JoyC ↑/↓ = move selection · press = focus session · status dots (run/wait/idle/err) |
 | BtnB hold 3 s / 8 s | Re-pair / clear bonds + reboot |
@@ -110,9 +110,11 @@ Host-side logic tests (no hardware): `cc -I main -I main/joystick test/test_<x>.
 **Near-term (reuse the pipeline we have):**
 - **Codex thread-switcher — validating.** Mechanism proven (`open "codex://threads/<id>"` foregrounds
   the app). Chain wired: device sends `@SEL <id>` over serial → companion runs `open codex://...`.
-  Reset-churn fix now IN: the companion opens with DTR/RTS deasserted and disables HUPCL so the stick
-  no longer reboots on connect/disconnect. Firmware fix IN: both the joystick press and a BtnA click
-  fire the focus. **Left:** confirm press → `@SEL` → thread focuses, end-to-end on device.
+  Reset-churn fix IN (DTR/RTS deasserted + HUPCL cleared, no reboot on connect/disconnect). Firmware
+  fix IN (both joystick press and BtnA click fire the focus). **Data source fixed:** the companion now
+  reads the app's actual open threads (`thread-writable-roots` + `local-projects` names + first-real-
+  message titles + REAL conversationIds) instead of stale session files — so ids resolve. **Left:**
+  confirm press → `@SEL` → thread focuses, end-to-end on device.
 - **Diagnose blinking / joystick drops.** Reported: screen blinks randomly, joystick sometimes stops.
   Storage/flash is fine (app uses ~74% of its partition). A tethered capture showed only ONE clean
   POWERON reset (no crash loop / brownout in that window). Leading hypothesis: **brownout reboots on
