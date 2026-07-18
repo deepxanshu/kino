@@ -108,7 +108,7 @@ void create_setup_screen(void)
     lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
     ui_theme_apply_label(label);
 
-    setup_device_label = create_status_label(setup_screen, 42, "Magic Stick");
+    setup_device_label = create_status_label(setup_screen, 42, "kino");
     lv_obj_set_style_text_color(setup_device_label, ui_theme_accent_color(), LV_PART_MAIN);
     setup_mouse_label  = create_status_label(setup_screen, 67, "Mouse: INIT");
     setup_hfp_label    = create_status_label(setup_screen, 91, "HFP: INIT");
@@ -184,10 +184,6 @@ void update_setup_screen(const joystick_data_t *data)
     if (setup_wifi_label != NULL) {
         lv_label_set_text_fmt(setup_wifi_label, "WiFi: %s",
                               wifi_conn_is_connected() ? "connected" : "...");
-        lv_obj_set_style_text_color(setup_wifi_label,
-                                    wifi_conn_is_connected() ? ui_theme_accent_color()
-                                                             : ui_theme_grid_color(),
-                                    LV_PART_MAIN);
     }
     if (setup_pairing_label != NULL) {
         lv_label_set_text(setup_pairing_label, bt_input_pairing_status_text());

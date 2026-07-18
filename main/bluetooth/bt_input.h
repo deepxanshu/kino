@@ -14,7 +14,7 @@
 extern "C" {
 #endif
 
-#define BT_INPUT_DEVICE_NAME "Magic Stick"
+#define BT_INPUT_DEVICE_NAME "kino"
 
 void bt_input_init(void);
 

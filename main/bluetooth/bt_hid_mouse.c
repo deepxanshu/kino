@@ -73,7 +73,7 @@ static uint8_t s_hid_mouse_descriptor[] = {
 
 static esp_hidd_app_param_t s_hid_app = {
     .name          = BT_INPUT_DEVICE_NAME,
-    .description   = "Magic Stick Mouse",
+    .description   = "kino mouse",
     .provider      = "M5Stack",
     .subclass      = ESP_HID_CLASS_COM,
     .desc_list     = s_hid_mouse_descriptor,
