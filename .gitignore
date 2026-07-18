@@ -7,3 +7,5 @@ build
 *.map
 sdkconfig.old
 .DS_Store
+companion/.venv/
+build/

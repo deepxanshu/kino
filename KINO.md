@@ -26,7 +26,7 @@ This file is the running log so nothing gets lost as it grows.
 | JoyC click, then hold & move (<450 ms window) | Scroll / pan |
 | **BtnA double-tap** | Start voice dictation (device mic on + Ctrl+F5) |
 | **BtnA single-tap** | Enter/send; if dictating, first stops voice (Ctrl+F5 paste) then sends. On Agents page: select thread → jump home |
-| **BtnPWR (side button)** | click: while dictating = **Escape** · otherwise = **toggle sleep** (screen off/on, instant wake) · ~6s hold = hardware power off |
+| **BtnPWR (side button)** | click = **Escape** (only while dictating) · ~6s hold = hardware power off (for battery) |
 | BtnB tap | Cycle screens: Setup → Magic → **Agents** → Setup |
 | **Agents page** | JoyC ↑/↓ = move selection · press = focus session · status dots (run/wait/idle/err) |
 | BtnB hold 3 s / 8 s | Re-pair / clear bonds + reboot |
@@ -57,13 +57,21 @@ This file is the running log so nothing gets lost as it grows.
    bundle `com.openai.codex`, registers the `codex://` scheme). Frames carry the id as `name~S~id`.
 
 ### Running the companion
+It **auto-starts** via a launchd agent (`companion/com.deepxanshu.kino-companion.plist`, installed to
+`~/Library/LaunchAgents/`, KeepAlive + RunAtLoad, uses `companion/.venv`). So whenever the stick is
+plugged in, the feed runs — no manual step, and it survives reboots/unplugs (auto-reconnects).
 ```sh
-pip3 install pyserial          # once (or use the esp-idf env python, which has it)
-python3 companion/codex_agents.py            # print the derived chat list
-python3 companion/codex_agents.py --serial   # stream it to the stick over USB
+# manual run / debugging:
+companion/.venv/bin/python companion/codex_agents.py           # print the open-thread list
+companion/.venv/bin/python companion/codex_agents.py --serial  # stream to the stick
+# manage the agent:
+launchctl load -w  ~/Library/LaunchAgents/com.deepxanshu.kino-companion.plist   # enable
+launchctl unload   ~/Library/LaunchAgents/com.deepxanshu.kino-companion.plist   # disable
+tail -f /tmp/kino-companion.log                                                  # logs
 ```
-Keep `--serial` running for live data. Status logic: `queued-follow-ups` → attention (yellow),
-running process → green, else idle. Real Mac-side thread-focus on select is a later phase.
+Data = the app's open threads (`thread-writable-roots`). Live feed needs the stick on **USB** (serial);
+untethered on Bluetooth carries voice/cursor/keys but not the thread list. No demo fallback — if no
+feed, the screen shows "waiting for feed".
 
 ## Hardware constraints & decisions (hard-won — don't re-litigate)
 
@@ -131,7 +139,6 @@ Host-side logic tests (no hardware): `cc -I main -I main/joystick test/test_<x>.
   remote as a 4th screen in the BtnB cycle; scroll IR commands with the JoyC, press to fire. No
   companion/network needed. (WiFi/smart-home — HomeKit, smart bulbs — is a separate, harder path
   needing network + per-vendor APIs; do IR first.)
-- **Auto-start the companion** — a launchd/login item so the live feed is always on.
 
 **Later:**
 - **F13–F24 programmable palette** — on-screen strip of bindable keys (macOS Shortcuts / Raycast).

@@ -173,26 +173,8 @@ def find_port():
     return hits[0] if hits else None
 
 
-def serial_mode(argv):
-    try:
-        import serial
-    except ImportError:
-        print("pyserial not installed. Run: pip3 install pyserial  (or use the esp-idf env python)")
-        sys.exit(1)
-
-    port = None
-    for i, a in enumerate(argv):
-        if a == "--serial" and i + 1 < len(argv) and not argv[i + 1].startswith("-"):
-            port = argv[i + 1]
-    if port is None:
-        port = find_port()
-    if port is None:
-        print("no serial port found (plug in the stick)")
-        sys.exit(1)
-
-    import threading
-    import subprocess
-
+def _open_port(port):
+    import serial
     ser = serial.Serial()
     ser.port = port
     ser.baudrate = 115200
@@ -206,18 +188,23 @@ def serial_mode(argv):
     except Exception:
         pass
     # Disable hangup-on-close (HUPCL) so quitting/killing the companion doesn't
-    # toggle DTR and reset the stick -- this was the main source of reset churn.
+    # toggle DTR and reset the stick.
     try:
         import termios
         attrs = termios.tcgetattr(ser.fd)
         attrs[2] &= ~termios.HUPCL
         termios.tcsetattr(ser.fd, termios.TCSANOW, attrs)
     except Exception as e:
-        print("note: could not disable HUPCL:", e)
-    print(f"streaming Codex chats to {port} @115200 (Ctrl-C to stop)")
+        print("note: could not disable HUPCL:", e, flush=True)
+    return ser
 
-    # Reader thread: the device sends "@SEL <conversationId>" when you select a
-    # thread; fire the codex:// deep link to focus that thread in the Codex app.
+
+def _start_reader(ser):
+    # The device sends "@SEL <conversationId>" when you select a thread; fire the
+    # codex:// deep link to focus that thread in the Codex app.
+    import threading
+    import subprocess
+
     def reader():
         buf = b""
         while True:
@@ -231,21 +218,55 @@ def serial_mode(argv):
             while b"\n" in buf:
                 ln, buf = buf.split(b"\n", 1)
                 s = ln.decode("utf-8", errors="ignore").strip()
-                if s:
-                    print("recv:", s)  # debug: show all device->Mac serial lines
                 if s.startswith("@SEL "):
                     tid = s[5:].strip()
                     if tid:
-                        print("focus thread:", tid)
+                        print("focus thread:", tid, flush=True)
                         subprocess.run(["open", f"codex://threads/{tid}"], check=False)
 
     threading.Thread(target=reader, daemon=True).start()
 
+
+def serial_mode(argv):
+    try:
+        import serial  # noqa: F401
+    except ImportError:
+        print("pyserial not installed. Run: pip3 install pyserial (or use companion/.venv)")
+        sys.exit(1)
+
+    argport = None
+    for i, a in enumerate(argv):
+        if a == "--serial" and i + 1 < len(argv) and not argv[i + 1].startswith("-"):
+            argport = argv[i + 1]
+
+    print("kino companion: feeding Codex threads to the stick (Ctrl-C to stop)", flush=True)
+    # Resilient loop: wait for the stick, reconnect on drop -- so it can run
+    # unattended (e.g. as a launchd agent) across unplugs and reboots.
     while True:
-        rows, _, _ = derive()
-        line = frame(rows)
-        ser.write(line.encode())
-        time.sleep(1.5)
+        port = argport or find_port()
+        if not port:
+            time.sleep(3)
+            continue
+        try:
+            ser = _open_port(port)
+        except Exception as e:
+            print("open failed:", e, flush=True)
+            time.sleep(3)
+            continue
+        print("connected:", port, flush=True)
+        _start_reader(ser)
+        try:
+            while True:
+                rows, _, _ = derive()
+                ser.write(frame(rows).encode())
+                time.sleep(1.5)
+        except Exception as e:
+            print("serial dropped, reconnecting:", e, flush=True)
+            try:
+                ser.close()
+            except Exception:
+                pass
+            time.sleep(2)
 
 
 def main():
