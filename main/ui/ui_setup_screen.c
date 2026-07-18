@@ -5,6 +5,7 @@
  */
 #include "ui_setup_screen.h"
 #include "../bluetooth/bt_input.h"
+#include "../wifi_conn.h"
 #include "../lvgl_port.h"
 #include "ui_theme.h"
 #include "esp_log.h"
@@ -18,6 +19,7 @@ static lv_obj_t *setup_mouse_label  = NULL;
 static lv_obj_t *setup_hfp_label    = NULL;
 static lv_obj_t *setup_hfp_chan_label = NULL;
 static lv_obj_t *setup_mode_label   = NULL;
+static lv_obj_t *setup_wifi_label   = NULL;
 static lv_obj_t *setup_pairing_label = NULL;
 
 static lv_point_t s_setup_underline_points[2] = {{0, 0}, {117, 0}};
@@ -112,6 +114,7 @@ void create_setup_screen(void)
     setup_hfp_label    = create_status_label(setup_screen, 91, "HFP: INIT");
     setup_hfp_chan_label = create_status_label(setup_screen, 115, "HFP Chan: OFF");
     setup_mode_label   = create_status_label(setup_screen, 139, "Battery: 100%");
+    setup_wifi_label   = create_status_label(setup_screen, 163, "WiFi: ...");
     setup_pairing_label = create_bottom_status_label(setup_screen, 196, "Discoverable");
 
     lvgl_port_unlock();
@@ -178,6 +181,14 @@ void update_setup_screen(const joystick_data_t *data)
     if (setup_mode_label != NULL) {
         lv_label_set_text_fmt(setup_mode_label, "Battery: %d%%", data->bat);
     }
+    if (setup_wifi_label != NULL) {
+        lv_label_set_text_fmt(setup_wifi_label, "WiFi: %s",
+                              wifi_conn_is_connected() ? "connected" : "...");
+        lv_obj_set_style_text_color(setup_wifi_label,
+                                    wifi_conn_is_connected() ? ui_theme_accent_color()
+                                                             : ui_theme_grid_color(),
+                                    LV_PART_MAIN);
+    }
     if (setup_pairing_label != NULL) {
         lv_label_set_text(setup_pairing_label, bt_input_pairing_status_text());
     }
@@ -207,5 +218,6 @@ void ui_setup_screen_destory(void)
     setup_hfp_label    = NULL;
     setup_hfp_chan_label = NULL;
     setup_mode_label   = NULL;
+    setup_wifi_label   = NULL;
     setup_pairing_label = NULL;
 }

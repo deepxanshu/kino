@@ -1,0 +1,17 @@
+/*
+ * kino WiFi config -- COPY this file to `wifi_config.h` (same folder) and fill in
+ * your 2.4GHz network. wifi_config.h is gitignored so your password never lands
+ * in git. The ESP32 is 2.4GHz-only, so use a 2.4GHz SSID (or a dual-band SSID
+ * that includes 2.4GHz). Requires "client/AP isolation" OFF on the router.
+ */
+#ifndef WIFI_CONFIG_H
+#define WIFI_CONFIG_H
+
+#define KINO_WIFI_SSID "YOUR_2G_SSID_HERE"
+#define KINO_WIFI_PASS "YOUR_WIFI_PASSWORD_HERE"
+
+// mDNS hostname the device advertises; the companion connects to <this>.local
+#define KINO_MDNS_HOST "kino"
+#define KINO_TCP_PORT  5010
+
+#endif  // WIFI_CONFIG_H

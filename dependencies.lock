@@ -23,6 +23,16 @@ dependencies:
       registry_url: https://components.espressif.com/
       type: service
     version: 1.5.1
+  espressif/mdns:
+    component_hash: e81ca7a7f53ea34e78274df054da692c272e1315572876b237b1748e267c013b
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.11.3
   idf:
     source:
       type: idf
@@ -54,10 +64,11 @@ dependencies:
     version: 0.2.11
 direct_dependencies:
 - espressif/i2c_bus
+- espressif/mdns
 - idf
 - lvgl/lvgl
 - m5stack/m5gfx
 - m5stack/m5unified
-manifest_hash: 22332a1459165d453f238781ef8e498082256edb4e1869a287b08e2e91dcd4e0
+manifest_hash: 1d94bd17aeaecdc6288bea8e8d2dec7e6986c4b57a2b6a67ba7d745722e8f701
 target: esp32
 version: 2.0.0

@@ -2,6 +2,9 @@ set(SOURCES
     app_state.c
     agents_model.c
     agents_serial.c
+    agents_proto.c
+    agents_net.c
+    wifi_conn.c
     button_action.c
     device_mode.c
     bluetooth/bt_pairing_status.c
@@ -30,5 +33,5 @@ idf_component_register(SRCS ${SOURCES}
                     joystick
                     mic
                     ui
-                    REQUIRES bt nvs_flash
+                    REQUIRES bt nvs_flash esp_wifi esp_netif esp_event
                     )

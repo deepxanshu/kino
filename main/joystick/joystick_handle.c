@@ -18,6 +18,7 @@
 #include "joyc_i2c_bridge.h"
 #include "mouse_controller.h"
 #include "../agents_model.h"
+#include "../agents_net.h"
 #include "../ui/ui_agents_screen.h"
 #include <inttypes.h>
 
@@ -471,8 +472,11 @@ void agents_select_current(void)
     size_t n = agents_model_get_selected(id, sizeof(id));
     ESP_LOGI(TAG, "agents select: id=%s -> home", n > 0 ? id : "(none)");
     if (n > 0) {
-        printf("@SEL %s\n", id);
+        char msg[AGENT_ID_LEN + 8];
+        snprintf(msg, sizeof(msg), "@SEL %s\n", id);
+        printf("%s", msg);          // USB-serial companion
         fflush(stdout);
+        agents_net_send_line(msg);  // WiFi companion
     }
     device_mode_enter(MODE_RUNNING);
 }

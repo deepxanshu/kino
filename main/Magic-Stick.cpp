@@ -22,6 +22,8 @@ extern "C" {
 #include "mic_handle.h"
 #include "agents_model.h"
 #include "agents_serial.h"
+#include "agents_net.h"
+#include "wifi_conn.h"
 
 #include "lvgl_port.h"
 
@@ -185,11 +187,16 @@ void app_main(void)
     bt_input_init();
     log_porta_levels("after bt_input_init");
 
+    wifi_conn_start();  // kino: WiFi STA (coexists with BT) for the cable-free agent feed
+    agents_net_start(); // kino: mDNS (kino.local) + TCP server for the WiFi feed
+    log_porta_levels("after wifi_conn_start");
+
     agents_model_init();  // kino: init agent-session model before its readers/writers
     xTaskCreate(handle_setup_screen, "handle_setup_screen", 8192, NULL, 5, NULL);      // handle setup mode
     xTaskCreate(handle_running_screen, "handle_running_screen", 8192, NULL, 5, NULL);  // handle running mode
     xTaskCreate(handle_agents_screen, "handle_agents_screen", 8192, NULL, 5, NULL);    // kino: agents page
-    xTaskCreate(handle_agents_serial, "handle_agents_serial", 4096, NULL, 5, NULL);    // kino: serial feed
+    // kino: USB-serial feed task dropped -- WiFi (agents_net) is the transport now,
+    // and freeing its stack + UART RX buffer reclaims RAM for WiFi coexistence.
     xTaskCreate(handle_mic_screen, "handle_mic_screen", 8192, NULL, 5, NULL);
 
     while (1) {
