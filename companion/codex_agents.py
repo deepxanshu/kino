@@ -246,15 +246,34 @@ def net_mode(argv):
         if a == "--net" and i + 1 < len(argv) and not argv[i + 1].startswith("-"):
             host = argv[i + 1]
 
+    cache_file = os.path.expanduser("~/.kino_ip")
     print(f"kino companion (WiFi): connecting to {host}:{port} (Ctrl-C to stop)", flush=True)
+    last_err = None
     while True:
+        # Try the mDNS name first; fall back to the last-known IP. mDNS on the
+        # stick can fail to start (tight RAM), so we must not depend on it.
+        targets = [host]
         try:
-            sock = socket.create_connection((host, port), timeout=6)
-        except Exception as e:
-            print("connect failed, retrying:", e, flush=True)
-            time.sleep(3)
+            cached = open(cache_file).read().strip()
+            if cached and cached not in targets:
+                targets.append(cached)
+        except Exception:
+            pass
+        sock = None
+        for t in targets:
+            try:
+                sock = socket.create_connection((t, port), timeout=3)
+                break
+            except Exception as e:
+                last_err = e
+        if sock is None:
+            time.sleep(1)
             continue
-        print("connected to", host, flush=True)
+        try:
+            open(cache_file, "w").write(sock.getpeername()[0])
+        except Exception:
+            pass
+        print("connected to", sock.getpeername()[0], flush=True)
 
         def reader(s):
             buf = b""
