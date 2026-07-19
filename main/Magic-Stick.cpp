@@ -41,7 +41,7 @@ static void log_porta_levels(const char *stage)
 static void delayed_net_start(void *arg)
 {
     (void)arg;
-    vTaskDelay(pdMS_TO_TICKS(8000));
+    vTaskDelay(pdMS_TO_TICKS(4000));
     wifi_conn_start();
     agents_net_start();
     vTaskDelete(NULL);

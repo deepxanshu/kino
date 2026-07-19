@@ -13,13 +13,23 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "lwip/sockets.h"
-#include "mdns.h"
 #include <string.h>
 
-static const char *TAG = "agents_net";
-#define NET_LINE_MAX 512
+// kino: dead-simple UDP transport. The stick broadcasts a "KINO" beacon every
+// 3s so the Mac companion always knows its address (survives DHCP changes, no
+// mDNS, no TCP connections to break). The companion sends "@A|..." frames as
+// datagrams to KINO_TCP_PORT; the stick remembers the sender and sends
+// "@SEL <id>" datagrams back to it. Connectionless = self-healing.
 
-static int s_client_fd = -1;
+static const char *TAG = "agents_net";
+#define BEACON_PORT (KINO_TCP_PORT + 1)   // companion listens here
+#define BEACON_MS   3000
+#define FEED_FRESH_MS 8000
+
+static int s_sock = -1;
+static struct sockaddr_in s_peer;          // last companion that sent a frame
+static bool s_have_peer = false;
+static TickType_t s_last_frame_tick = 0;
 static SemaphoreHandle_t s_lock = NULL;
 
 void agents_net_send_line(const char *line)
@@ -28,101 +38,101 @@ void agents_net_send_line(const char *line)
         return;
     }
     xSemaphoreTake(s_lock, portMAX_DELAY);
-    if (s_client_fd >= 0) {
-        send(s_client_fd, line, strlen(line), 0);
+    if (s_sock >= 0 && s_have_peer) {
+        // send 3x -- datagrams can drop and this is a user action
+        for (int i = 0; i < 3; ++i) {
+            sendto(s_sock, line, strlen(line), 0, (struct sockaddr *)&s_peer, sizeof(s_peer));
+        }
     }
     xSemaphoreGive(s_lock);
 }
 
 bool agents_net_client_connected(void)
 {
-    return s_client_fd >= 0;
-}
-
-static void set_client(int fd)
-{
-    xSemaphoreTake(s_lock, portMAX_DELAY);
-    s_client_fd = fd;
-    xSemaphoreGive(s_lock);
-}
-
-static void mdns_start(void)
-{
-    if (mdns_init() != ESP_OK) {
-        ESP_LOGW(TAG, "mdns_init failed");
-        return;
-    }
-    mdns_hostname_set(KINO_MDNS_HOST);          // -> <host>.local
-    mdns_instance_name_set("kino agent stick");
-    mdns_service_add(NULL, "_kino", "_tcp", KINO_TCP_PORT, NULL, 0);
-    ESP_LOGI(TAG, "mdns: %s.local advertised, port %d", KINO_MDNS_HOST, KINO_TCP_PORT);
+    return s_have_peer &&
+           (xTaskGetTickCount() - s_last_frame_tick) < pdMS_TO_TICKS(FEED_FRESH_MS);
 }
 
 static void net_task(void *arg)
 {
     (void)arg;
-    // wait for WiFi so mDNS/socket bind on a real interface
     while (!wifi_conn_is_connected()) {
         vTaskDelay(pdMS_TO_TICKS(500));
     }
-    mdns_start();
 
-    int listen_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-    if (listen_sock < 0) {
+    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+    if (sock < 0) {
         ESP_LOGE(TAG, "socket() failed");
         vTaskDelete(NULL);
         return;
     }
-    int opt = 1;
-    setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-    struct sockaddr_in addr = {
+    int bc = 1;
+    setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &bc, sizeof(bc));
+    struct sockaddr_in bind_addr = {
         .sin_family = AF_INET,
         .sin_addr.s_addr = htonl(INADDR_ANY),
         .sin_port = htons(KINO_TCP_PORT),
     };
-    if (bind(listen_sock, (struct sockaddr *)&addr, sizeof(addr)) != 0 ||
-        listen(listen_sock, 1) != 0) {
-        ESP_LOGE(TAG, "bind/listen failed on port %d", KINO_TCP_PORT);
-        close(listen_sock);
+    if (bind(sock, (struct sockaddr *)&bind_addr, sizeof(bind_addr)) != 0) {
+        ESP_LOGE(TAG, "bind %d failed", KINO_TCP_PORT);
+        close(sock);
         vTaskDelete(NULL);
         return;
     }
-    ESP_LOGI(TAG, "TCP server listening on %d", KINO_TCP_PORT);
+    struct timeval tv = {.tv_sec = 0, .tv_usec = 300000};
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
-    char line[NET_LINE_MAX];
-    size_t len = 0;
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+    s_sock = sock;
+    xSemaphoreGive(s_lock);
+    ESP_LOGI(TAG, "UDP up: data port %d, beacon -> %d every %dms", KINO_TCP_PORT, BEACON_PORT, BEACON_MS);
+
+    struct sockaddr_in bcast = {
+        .sin_family = AF_INET,
+        .sin_addr.s_addr = htonl(INADDR_BROADCAST),
+        .sin_port = htons(BEACON_PORT),
+    };
+    TickType_t last_beacon = 0;
+    char buf[512];
+
     while (1) {
+        TickType_t now = xTaskGetTickCount();
+        if ((now - last_beacon) >= pdMS_TO_TICKS(BEACON_MS)) {
+            static const char beacon[] = "KINO v1";
+            sendto(sock, beacon, sizeof(beacon) - 1, 0, (struct sockaddr *)&bcast, sizeof(bcast));
+            last_beacon = now;
+        }
+
         struct sockaddr_in src;
         socklen_t slen = sizeof(src);
-        int client = accept(listen_sock, (struct sockaddr *)&src, &slen);
-        if (client < 0) {
-            vTaskDelay(pdMS_TO_TICKS(200));
+        int r = recvfrom(sock, buf, sizeof(buf) - 1, 0, (struct sockaddr *)&src, &slen);
+        if (r <= 0) {
             continue;
         }
-        ESP_LOGI(TAG, "companion connected");
-        set_client(client);
-        len = 0;
-        uint8_t buf[128];
-        int r;
-        while ((r = recv(client, buf, sizeof(buf), 0)) > 0) {
-            for (int i = 0; i < r; ++i) {
-                char c = (char)buf[i];
-                if (c == '\n' || c == '\r') {
-                    if (len > 0) {
-                        line[len] = '\0';
-                        agents_proto_parse_frame(line);
-                        len = 0;
-                    }
-                } else if (len < NET_LINE_MAX - 1) {
-                    line[len++] = c;
-                } else {
-                    len = 0;
-                }
-            }
+        buf[r] = '\0';
+        // strip trailing newline(s)
+        while (r > 0 && (buf[r - 1] == '\n' || buf[r - 1] == '\r')) {
+            buf[--r] = '\0';
         }
-        ESP_LOGW(TAG, "companion disconnected");
-        set_client(-1);
-        close(client);
+        if (strncmp(buf, "@P", 2) == 0) {
+            // discovery probe from the companion (it initiates because the Mac
+            // firewall blocks unsolicited inbound UDP): reply + learn its addr.
+            static const char hello[] = "KINO v1";
+            sendto(sock, hello, sizeof(hello) - 1, 0, (struct sockaddr *)&src, slen);
+            xSemaphoreTake(s_lock, portMAX_DELAY);
+            s_peer = src;
+            s_have_peer = true;
+            xSemaphoreGive(s_lock);
+            continue;
+        }
+        if (strncmp(buf, "@A", 2) == 0) {
+            xSemaphoreTake(s_lock, portMAX_DELAY);
+            s_peer = src;
+            s_have_peer = true;
+            s_last_frame_tick = xTaskGetTickCount();
+            xSemaphoreGive(s_lock);
+            agents_proto_parse_frame(buf);
+        }
     }
 }
 
@@ -131,5 +141,5 @@ void agents_net_start(void)
     if (s_lock == NULL) {
         s_lock = xSemaphoreCreateMutex();
     }
-    xTaskCreate(net_task, "agents_net", 5120, NULL, 5, NULL);
+    xTaskCreate(net_task, "agents_net", 4096, NULL, 5, NULL);
 }

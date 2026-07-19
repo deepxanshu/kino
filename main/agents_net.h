@@ -12,12 +12,13 @@
 extern "C" {
 #endif
 
-// Start the WiFi data layer: advertise <KINO_MDNS_HOST>.local via mDNS and run a
-// TCP server on KINO_TCP_PORT. The Mac companion connects and streams the agent
-// list ("@A|..." frames); the device sends "@SEL <id>" back over the same socket.
+// Start the WiFi data layer: UDP socket on KINO_TCP_PORT + a broadcast beacon
+// every 3s so the companion always knows the stick's address (no mDNS, no TCP).
+// The companion sends "@A|..." datagrams; the stick replies "@SEL <id>" to the
+// last sender. Connectionless and self-healing across IP changes/reboots.
 void agents_net_start(void);
 
-// Send a line to the connected companion (e.g. "@SEL <id>\n"). No-op if none.
+// Send a line to the last-seen companion (e.g. "@SEL <id>\n"). No-op if none.
 void agents_net_send_line(const char *line);
 
 bool agents_net_client_connected(void);

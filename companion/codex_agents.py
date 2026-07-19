@@ -234,79 +234,62 @@ def _start_reader(ser):
 
 
 def net_mode(argv):
-    # WiFi transport: connect to the stick's TCP server (kino.local:5010), stream
-    # the agent list, and read "@SEL <id>" back to fire the codex:// deep link.
+    # WiFi transport, UDP. The stick broadcasts a "KINO" beacon every 3s on
+    # port 5011 -- we learn its address from that (no mDNS, no cached IPs, no
+    # TCP to break). We send "@A|..." frames to the stick on 5010 every 2s; the
+    # stick sends "@SEL <id>" datagrams back (3x for reliability -- dedupe).
     import socket
-    import threading
     import subprocess
 
-    host = "kino.local"
-    port = 5010
-    for i, a in enumerate(argv):
-        if a == "--net" and i + 1 < len(argv) and not argv[i + 1].startswith("-"):
-            host = argv[i + 1]
+    data_port = 5010
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    sock.settimeout(0.5)
 
-    cache_file = os.path.expanduser("~/.kino_ip")
-    print(f"kino companion (WiFi): connecting to {host}:{port} (Ctrl-C to stop)", flush=True)
-    last_err = None
+    device = None
+    last_send = 0.0
+    last_probe = 0.0
+    last_heard = 0.0
+    last_sel = (None, 0.0)
+    print("kino companion (WiFi/UDP): probing for the stick...", flush=True)
     while True:
-        # Try the mDNS name first; fall back to the last-known IP. mDNS on the
-        # stick can fail to start (tight RAM), so we must not depend on it.
-        targets = [host]
-        try:
-            cached = open(cache_file).read().strip()
-            if cached and cached not in targets:
-                targets.append(cached)
-        except Exception:
-            pass
-        sock = None
-        for t in targets:
+        # Probe by broadcast until found; re-probe if silent for 20s (IP moved /
+        # stick rebooted). We initiate, so the Mac firewall lets replies in.
+        now = time.time()
+        if (device is None or now - last_heard > 20) and now - last_probe >= 2:
             try:
-                sock = socket.create_connection((t, port), timeout=3)
-                break
-            except Exception as e:
-                last_err = e
-        if sock is None:
-            time.sleep(1)
-            continue
-        try:
-            open(cache_file, "w").write(sock.getpeername()[0])
-        except Exception:
-            pass
-        print("connected to", sock.getpeername()[0], flush=True)
-
-        def reader(s):
-            buf = b""
-            try:
-                while True:
-                    chunk = s.recv(128)
-                    if not chunk:
-                        break
-                    buf += chunk
-                    while b"\n" in buf:
-                        ln, buf = buf.split(b"\n", 1)
-                        line = ln.decode("utf-8", errors="ignore").strip()
-                        if line.startswith("@SEL "):
-                            tid = line[5:].strip()
-                            if tid:
-                                print("focus thread:", tid, flush=True)
-                                subprocess.run(["open", f"codex://threads/{tid}"], check=False)
+                sock.sendto(b"@P", ("255.255.255.255", data_port))
             except Exception:
                 pass
-
-        threading.Thread(target=reader, args=(sock,), daemon=True).start()
+            last_probe = now
         try:
-            while True:
-                rows, _, _ = derive()
-                sock.sendall(frame(rows).encode())
-                time.sleep(1.5)
+            data, src = sock.recvfrom(1024)
+            msg = data.decode("utf-8", errors="ignore").strip()
+            if msg.startswith("KINO"):
+                last_heard = time.time()
+                if device is None or device[0] != src[0]:
+                    device = (src[0], data_port)
+                    print("stick found at", src[0], flush=True)
+            elif msg.startswith("@SEL "):
+                tid = msg[5:].strip()
+                if tid and (tid != last_sel[0] or time.time() - last_sel[1] > 1.5):
+                    last_sel = (tid, time.time())
+                    print("focus thread:", tid, flush=True)
+                    subprocess.run(["open", f"codex://threads/{tid}"], check=False)
+        except socket.timeout:
+            pass
         except Exception as e:
-            print("net dropped, reconnecting:", e, flush=True)
+            print("recv error:", e, flush=True)
+            time.sleep(0.5)
+
+        now = time.time()
+        if device and now - last_send >= 2.0:
             try:
-                sock.close()
-            except Exception:
-                pass
-            time.sleep(2)
+                rows, _, _ = derive()
+                sock.sendto(frame(rows).encode(), device)
+            except Exception as e:
+                print("send failed:", e, flush=True)
+            last_send = now
 
 
 def serial_mode(argv):
