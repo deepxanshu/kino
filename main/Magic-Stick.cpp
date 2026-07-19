@@ -36,6 +36,17 @@ static void log_porta_levels(const char *stage)
     ESP_LOGI(TAG, "%s: gpio0=%d gpio26=%d", stage, gpio_get_level(GPIO_NUM_0), gpio_get_level(GPIO_NUM_26));
 }
 
+// kino: start WiFi + the agent-feed server 8s after boot so Bluetooth (mouse,
+// voice) wins the shared antenna during its reconnect window.
+static void delayed_net_start(void *arg)
+{
+    (void)arg;
+    vTaskDelay(pdMS_TO_TICKS(8000));
+    wifi_conn_start();
+    agents_net_start();
+    vTaskDelete(NULL);
+}
+
 /**
  * @brief Handle Button Press.
  * 1. BtnA double tap = start voice (device mic + Ctrl+F5). BtnA single tap = Enter;
@@ -187,9 +198,11 @@ void app_main(void)
     bt_input_init();
     log_porta_levels("after bt_input_init");
 
-    wifi_conn_start();  // kino: WiFi STA (coexists with BT) for the cable-free agent feed
-    agents_net_start(); // kino: mDNS (kino.local) + TCP server for the WiFi feed
-    log_porta_levels("after wifi_conn_start");
+    // kino: WiFi is started DELAYED (below) so Bluetooth reconnects first at
+    // boot -- they share one antenna, and the mouse/voice link is the priority.
+    // The agent feed (WiFi) is secondary and can come up 8s later.
+    xTaskCreate(delayed_net_start, "net_start", 6144, NULL, 3, NULL);
+    log_porta_levels("after net start scheduled");
 
     agents_model_init();  // kino: init agent-session model before its readers/writers
     xTaskCreate(handle_setup_screen, "handle_setup_screen", 8192, NULL, 5, NULL);      // handle setup mode
